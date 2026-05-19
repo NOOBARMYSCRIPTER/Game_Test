@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Math Duel: Magic Caster</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #141419;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        #canvas-wrapper {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        canvas.emscripten {
+            border: none;
+            background-color: black;
+            width: 100%;
+            height: 100%;
+        }
+
+        #game-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .monster-plate {
+            position: absolute;
+            background: rgba(20, 20, 25, 0.85);
+            border: 2px solid #ff4444;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transform: translate(-50%, -100%);
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .monster-input {
+            width: 60px;
+            background: #222;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 4px;
+            text-align: center;
+            font-size: 16px;
+            border-radius: 4px;
+        }
+
+        #start-screen {
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 10, 15, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .btn-start {
+            padding: 15px 40px;
+            font-size: 24px;
+            background: #2463eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-start:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-wrapper">
+        <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+
+        <div id="game-ui">
+            <div id="start-screen">
+                <button class="btn-start" id="start-btn" onclick="ClickStartGame()">НАЧАТЬ ДУЭЛЬ</button>
+            </div>
+
+            <div id="monsters-container"></div>
+        </div>
+    </div>
+
+    <script type='text/javascript'>
+        var Module = {
+            canvas: (function() {
+                var canvas = document.getElementById('canvas');
+                return canvas;
+            })()
+        };
+
+        function ClickStartGame() {
+            document.getElementById('start-screen').style.display = 'none';
+            Module.ccall('StartGameSession', null, [], []);
+        }
+
+        Module.updateMonsterUI = function(id, challengeText, pctX, pctY) {
+            let container = document.getElementById('monsters-container');
+            let plate = document.getElementById('monster-' + id);
+
+            if (!plate) {
+                plate = document.createElement('div');
+                plate.id = 'monster-' + id;
+                plate.className = 'monster-plate';
+                plate.innerHTML = `
+                    <div class="challenge-text">${challengeText}</div>
+                    <input type="number" class="monster-input" placeholder="?" id="input-${id}">
+                `;
+                container.appendChild(plate);
+
+                plate.querySelector('input').addEventListener('input', (e) => {
+
+                });
+            }
+
+            let pixelX = pctX * 1280;
+            let pixelY = pctY * 720;
+
+            plate.style.left = pixelX + 'px';
+            plate.style.top = (pixelY - 30) + 'px';
+        };
+    </script>
+    
+    {{{ SCRIPT }}}
+
+</body>
+</html>
