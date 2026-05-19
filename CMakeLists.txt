@@ -25,13 +25,7 @@ add_executable(game src/game.cpp)
 
 target_link_libraries(game PRIVATE raylib)
 
-target_link_options(game PRIVATE
-    "-DOLC_GFX_PLATFORM_GLUT"
-    "-sUSE_GLFW=3"
-    "-sASYNCIFY"
-    "-sEXPORTED_FUNCTIONS=['_main','_StartGameSession']"
-    "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
-    "--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/src/shell.html"
+set_target_properties(game PROPERTIES
+    SUFFIX ".html"
+    LINK_FLAGS "-sUSE_GLFW=3 -sASYNCIFY -sEXPORTED_FUNCTIONS=['_main','_StartGameSession'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString'] --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/src/shell.html"
 )
-
-set_target_properties(game PROPERTIES SUFFIX ".html")
