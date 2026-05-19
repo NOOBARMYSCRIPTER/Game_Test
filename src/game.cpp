@@ -16,8 +16,9 @@ struct Enemy {
 };
 
 std::vector<Enemy> g_enemies;
-Vector2 g_playerPos = { 0.0f, 0.0f };
+Vector2 g_playerPos = { 640.0f, 360.0f };
 int g_nextEntityId = 3;
+bool g_sessionStarted = false;
 
 std::string GenerateChallenge(int& out_answer) {
     std::random_device rd;
@@ -38,13 +39,15 @@ void SpawnEnemy(float x, float y) {
 }
 
 void UpdateGame(float deltaTime) {
+    if (!g_sessionStarted) return;
+
     for (auto& enemy : g_enemies) {
         Vector2 dir = { g_playerPos.x - enemy.position.x, g_playerPos.y - enemy.position.y };
         float length = std::sqrt(dir.x * dir.x + dir.y * dir.y);
         
-        if (length > 0.5f) {
-            enemy.position.x += (dir.x / length) * 1.8f * deltaTime;
-            enemy.position.y += (dir.y / length) * 1.8f * deltaTime;
+        if (length > 10.0f) { 
+            enemy.position.x += (dir.x / length) * 100.0f * deltaTime;
+            enemy.position.y += (dir.y / length) * 100.0f * deltaTime;
         }
 
         float pctX = enemy.position.x / 1280.0f;
@@ -60,15 +63,16 @@ void UpdateGame(float deltaTime) {
     }
 }
 
-// Отрисовка кадра
 void DrawGame() {
     BeginDrawing();
     ClearBackground({ 20, 20, 25, 255 });
 
-    DrawRectangle(640 - 20, 360 - 20, 40, 40, BLUE);
+    if (g_sessionStarted) {
+        DrawRectangle((int)g_playerPos.x - 20, (int)g_playerPos.y - 20, 40, 40, BLUE);
 
-    for (const auto& enemy : g_enemies) {
-        DrawRectangle((int)enemy.position.x - 20, (int)enemy.position.y - 20, 40, 40, RED);
+        for (const auto& enemy : g_enemies) {
+            DrawRectangle((int)enemy.position.x - 20, (int)enemy.position.y - 20, 40, 40, RED);
+        }
     }
 
     EndDrawing();
@@ -76,25 +80,27 @@ void DrawGame() {
 
 void GameLoop() {
     float dt = GetFrameTime();
+    if (dt > 0.1f) dt = 0.1f; 
+    
     UpdateGame(dt);
     DrawGame();
 }
 
 extern "C" {
     void EMSCRIPTEN_KEEPALIVE StartGameSession() {
+        g_enemies.clear();
         SpawnEnemy(100.0f, 360.0f);
         SpawnEnemy(1180.0f, 360.0f);
-        
-#ifdef __EMSCRIPTEN__
-        emscripten_set_main_loop(GameLoop, 0, 1);
-#endif
+        g_sessionStarted = true;
     }
 }
 
 int main() {
     InitWindow(1280, 720, "Math Duel: Raylib Edition");
     
-#ifndef __EMSCRIPTEN__
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(GameLoop, 0, 1);
+#else
     while (!WindowShouldClose()) {
         GameLoop();
     }
