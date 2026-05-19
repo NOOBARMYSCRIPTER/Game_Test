@@ -31,7 +31,7 @@ target_link_options(game PRIVATE
     "-sASYNCIFY"
     "-sEXPORTED_FUNCTIONS=['_main','_StartGameSession']"
     "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
-    "--shell-file ${raylib_SOURCE_DIR}/src/shell.html"
+    "--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/src/shell.html"
 )
 
 set_target_properties(game PROPERTIES SUFFIX ".html")
