@@ -1,0 +1,49 @@
+name: Build Raylib WebAssembly Game
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Emscripten SDK
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 3.1.64
+
+    - name: Verify Emscripten installation
+      run: |
+        emcc -v
+        emcmake --version
+
+    - name: Configure CMake with Emscripten
+      run: |
+        mkdir build
+        cd build
+        emcmake cmake -DCMAKE_BUILD_TYPE=Release ..
+
+    - name: Build Project
+      run: |
+        cd build
+        cmake --build . --config Release
+
+    - name: Organize Artifacts
+      run: |
+        mkdir dist
+        cp build/game.html dist/index.html
+        cp build/game.js dist/game.js
+        cp build/game.wasm dist/game.wasm
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: raylib-web-build
+        path: dist/
