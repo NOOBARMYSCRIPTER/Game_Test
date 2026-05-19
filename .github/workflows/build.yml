@@ -22,7 +22,6 @@ jobs:
     - name: Verify Emscripten installation
       run: |
         emcc -v
-        emcmake --version
 
     - name: Configure CMake with Emscripten
       run: |
