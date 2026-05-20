@@ -206,7 +206,7 @@
             const videoElement = document.getElementById('webcam');
             const startBtn = document.getElementById('start-btn');
 
-            worker = new Worker('hand_worker.js');
+            worker = new Worker('hand_worker.js', { type: 'module' });
 
             worker.onmessage = function(e) {
                 if (e.data.type === 'TRACKER_READY') {
