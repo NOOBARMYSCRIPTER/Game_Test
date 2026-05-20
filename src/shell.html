@@ -152,7 +152,7 @@
         let lastSentFingers = -1;
         let cameraReady = false;
         let aiReady = false;
-        let isProcessing = false;
+        let isProcessing = false; 
 
         const offscreenCanvas = document.createElement('canvas');
         const offscreenCtx = offscreenCanvas.getContext('2d');
@@ -172,11 +172,11 @@
                     
                     handLandmarker = await HandLandmarker.createFromOptions(vision, {
                         baseOptions: {
-                            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+                            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker_bundle.task",
                             delegate: "GPU"
                         },
                         runningMode: "IMAGE",
-                        numHands: 1
+                        numHands: 2
                     });
                     self.postMessage({ type: 'READY' });
                 } catch(e) {
@@ -193,29 +193,35 @@
                         const { imageData } = e.data;
                         const results = handLandmarker.detect(imageData);
                         
-                        let fingersCount = 0;
+                        let totalFingers = 0;
+
                         if (results.landmarks && results.landmarks.length > 0) {
-                            const landmarks = results.landmarks[0];
+                            for (let h = 0; h < results.landmarks.length; h++) {
+                                const landmarks = results.landmarks[h];
 
-                            const fingerTips = [8, 12, 16, 20];
-                            fingerTips.forEach(tip => {
-                                if (landmarks[tip].y < landmarks[tip - 2].y) {
-                                    fingersCount++;
-                                }
-                            });
+                                const fingerTips = [8, 12, 16, 20];
+                                fingerTips.forEach(tip => {
+                                    if (landmarks[tip].y < landmarks[tip - 2].y) {
+                                        totalFingers++;
+                                    }
+                                });
 
-                            if (results.handedness && results.handedness.length > 0) {
-                                const handInfo = results.handedness[0][0] || results.handedness[0];
-                                const isLeftHand = handInfo.categoryName === 'Left';
-                                
-                                if (isLeftHand) {
-                                    if (landmarks[4].x > landmarks[2].x + 0.02) fingersCount++;
-                                } else {
-                                    if (landmarks[4].x < landmarks[2].x - 0.02) fingersCount++;
+                                if (results.handedness && results.handedness[h]) {
+                                    const handInfo = results.handedness[h][0] || results.handedness[h];
+                                    const isLeftHand = handInfo.categoryName === 'Left';
+                                    
+                                    if (isLeftHand) {
+                                        if (landmarks[4].x > landmarks[2].x + 0.02) totalFingers++;
+                                    } else {
+                                        if (landmarks[4].x < landmarks[2].x - 0.02) totalFingers++;
+                                    }
                                 }
                             }
                         }
-                        self.postMessage({ type: 'RESULT', fingersCount });
+
+                        if (totalFingers > 10) totalFingers = 10;
+
+                        self.postMessage({ type: 'RESULT', fingersCount: totalFingers });
                     } catch(err) {
                         self.postMessage({ type: 'RESULT', fingersCount: 0 });
                     }
@@ -330,7 +336,7 @@
                 startBtn.style.opacity = '1';
                 startBtn.innerText = 'НАЧАТЬ ИГРУ';
 
-                setInterval(processVideoFrame, 40);
+                setInterval(processVideoFrame, 40); 
             }
         }
 
