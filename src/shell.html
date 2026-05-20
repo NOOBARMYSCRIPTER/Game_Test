@@ -121,7 +121,7 @@
         #webcam { display: none; }
     </style>
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/tasks_vision.js" crossorigin="anonymous"></script>
+    <script src="https://jsdelivr.net/@mediapipe/tasks-vision@0.10.8/vision_bundle.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -225,31 +225,31 @@
         }
         
         async function InitMediaPipeMainThread() {
-            const startBtn = document.getElementById('start-btn');
-            try {
+              const startBtn = document.getElementById('start-btn');
+              try {
                 startBtn.innerText = "ЗАГРУЗКА ЯДРА...";
                 
                 const vision = await mpTasksVision.FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
+                  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
                 );
-
+                
                 startBtn.innerText = "СКАЧИВАНИЕ МОДЕЛИ (15MB)...";
+                
                 handLandmarker = await mpTasksVision.HandLandmarker.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker_bundle/float16/1/hand_landmarker_bundle.task",
-                        delegate: "GPU"
-                    },
-                    runningMode: "VIDEO", 
-                    numHands: 1
+                  baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker_bundle/float16/1/hand_landmarker_bundle.task",
+                    delegate: "GPU"
+                  },
+                  runningMode: "VIDEO",
+                  numHands: 1
                 });
-
+                
                 aiReady = true;
                 checkReadyState();
-
-            } catch (err) {
-                console.error("Ошибка MediaPipe:", err);
+              } catch (err) {
+                console.error("Ошибка MediaPipe: ", err);
                 startBtn.innerText = "ОШИБКА ЗАГРУЗКИ СЕТИ";
-            }
+              }
         }
 
         function checkReadyState() {
