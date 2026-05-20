@@ -120,6 +120,8 @@
 
         #webcam { display: none; }
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -132,7 +134,7 @@
             <div id="gesture-debug">Пальцев на камере: <span id="gesture-value">0</span></div>
 
             <div id="start-screen" class="screen-overlay">
-                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ПОДКЛЮЧЕНИЕ...</button>
+                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ИИ...</button>
             </div>
 
             <div id="game-over-screen" class="screen-overlay">
@@ -144,91 +146,19 @@
         </div>
     </div>
 
-    <script id="worker-code" type="text/plain">
-        import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.js";
-
-        let handLandmarker = null;
-
-        async function initTracker() {
-            try {
-                self.postMessage({ type: 'STATUS', msg: 'Загрузка ядра MediaPipe...' });
-                
-                const vision = await FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
-                );
-                
-                self.postMessage({ type: 'STATUS', msg: 'Скачивание ИИ-модели (15MB)...' });
-                
-                handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker_bundle/float16/1/hand_landmarker_bundle.task",
-                        delegate: "GPU"
-                    },
-                    runningMode: "IMAGE",
-                    numHands: 1
-                });
-                
-                self.postMessage({ type: 'TRACKER_READY' });
-
-            } catch (error) {
-                self.postMessage({ type: 'STATUS', msg: 'ОШИБКА СЕТИ ИЛИ МОДЕЛИ' });
-            }
-        }
-
-        initTracker();
-
-        self.onmessage = async (e) => {
-            if (e.data.type === 'PROCESS_FRAME') {
-                if (!handLandmarker) {
-                    self.postMessage({ type: 'RESULTS', count: 0 });
-                    return;
-                }
-
-                const imgBitmap = e.data.img;
-                try {
-                    const results = handLandmarker.detect(imgBitmap);
-                    imgBitmap.close();
-
-                    let fingersCount = 0;
-                    if (results.landmarks && results.landmarks.length > 0) {
-                        const landmarks = results.landmarks[0];
-                        const fingerTips = [8, 12, 16, 20];
-                        
-                        fingerTips.forEach(tip => {
-                            if (landmarks[tip].y < landmarks[tip - 3].y) fingersCount++;
-                        });
-
-                        if (results.handedness && results.handedness.length > 0) {
-                            const isLeftHand = results.handedness[0][0].categoryName === 'Left';
-                            if (isLeftHand) {
-                                if (landmarks[4].x > landmarks[3].x) fingersCount++;
-                            } else {
-                                if (landmarks[4].x < landmarks[3].x) fingersCount++;
-                            }
-                        }
-                    }
-                    self.postMessage({ type: 'RESULTS', count: fingersCount });
-                } catch (err) {
-                    imgBitmap.close();
-                    self.postMessage({ type: 'RESULTS', count: 0 });
-                }
-            }
-        };
-    </script>
-
     <script type='text/javascript'>
         var Module = {
             canvas: (function() { return document.getElementById('canvas'); })()
         };
 
         let lastSentFingers = -1;
-        let worker = null;
-        let workerReady = false;
+        let handLandmarker = null;
         let cameraReady = false;
+        let aiReady = false;
 
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
-            InitMediaPipeWorkerInline();
+            InitMediaPipeMainThread();
         });
 
         function ClickStartGame() {
@@ -293,69 +223,90 @@
                     startBtn.innerText = 'ДОСТУП К КАМЕРЕ ЗАБЛОКИРОВАН';
                 });
         }
-
-        function InitMediaPipeWorkerInline() {
+        
+        async function InitMediaPipeMainThread() {
             const startBtn = document.getElementById('start-btn');
-            
             try {
-                const workerCode = document.getElementById('worker-code').textContent;
-                const blob = new Blob([workerCode], { type: 'application/javascript' });
-                const workerUrl = URL.createObjectURL(blob);
+                startBtn.innerText = "ЗАГРУЗКА ЯДРА...";
+                const vision = await bundling.FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
+                );
 
-                worker = new Worker(workerUrl, { type: 'module' });
+                startBtn.innerText = "СКАЧИВАНИЕ МОДЕЛИ (15MB)...";
+                handLandmarker = await bundling.HandLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker_bundle/float16/1/hand_landmarker_bundle.task",
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    numHands: 1
+                });
 
-                worker.onmessage = function(e) {
-                    if (e.data.type === 'STATUS') {
-                        startBtn.innerText = e.data.msg;
-                    }
-                    else if (e.data.type === 'TRACKER_READY') {
-                        workerReady = true;
-                        checkReadyState();
-                    } 
-                    else if (e.data.type === 'RESULTS') {
-                        const fingersCount = e.data.count;
-                        document.getElementById('gesture-value').innerText = fingersCount;
+                aiReady = true;
+                checkReadyState();
 
-                        if (fingersCount !== lastSentFingers && fingersCount > 0) {
-                            lastSentFingers = fingersCount;
-                            if (typeof Module.ccall === 'function') {
-                                Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
-                            }
-                        } else if (fingersCount === 0) {
-                            lastSentFingers = 0;
-                        }
-                        
-                        setTimeout(sendNextFrame, 50); 
-                    }
-                };
             } catch (err) {
-                console.error("Не удалось запустить инлайн-воркер:", err);
-                startBtn.innerText = 'КРИТИЧЕСКАЯ ОШИБКА ВОРКЕРА';
+                console.error("Ошибка MediaPipe:", err);
+                startBtn.innerText = "ОШИБКА ЗАГРУЗКИ СЕТИ";
             }
         }
 
         function checkReadyState() {
             const startBtn = document.getElementById('start-btn');
-            if (workerReady && cameraReady) {
+            if (aiReady && cameraReady) {
                 startBtn.removeAttribute('disabled');
                 startBtn.style.opacity = '1';
                 startBtn.innerText = 'НАЧАТЬ ИГРУ';
-                sendNextFrame();
+
+                requestAnimationFrame(processVideoFrame);
             }
         }
 
-        function sendNextFrame() {
+        function processVideoFrame() {
             const videoElement = document.getElementById('webcam');
-            
-            if (workerReady && cameraReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                createImageBitmap(videoElement).then(imageBitmap => {
-                    worker.postMessage({ type: 'PROCESS_FRAME', img: imageBitmap }, [imageBitmap]);
-                }).catch(() => {
-                    setTimeout(sendNextFrame, 50);
-                });
-            } else {
-                setTimeout(sendNextFrame, 100);
+
+            if (handLandmarker && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                try {
+                    const timestamp = performance.now();
+                    const results = handLandmarker.detectForVideo(videoElement, timestamp);
+                    
+                    let fingersCount = 0;
+
+                    if (results.landmarks && results.landmarks.length > 0) {
+                        const landmarks = results.landmarks[0];
+                        const fingerTips = [8, 12, 16, 20];
+                        
+                        fingerTips.forEach(tip => {
+                            if (landmarks[tip].y < landmarks[tip - 3].y) fingersCount++;
+                        });
+
+                        if (results.handedness && results.handedness.length > 0) {
+                            const isLeftHand = results.handedness[0][0].categoryName === 'Left';
+                            if (isLeftHand) {
+                                if (landmarks[4].x > landmarks[3].x) fingersCount++;
+                            } else {
+                                if (landmarks[4].x < landmarks[3].x) fingersCount++;
+                            }
+                        }
+                    }
+
+                    document.getElementById('gesture-value').innerText = fingersCount;
+
+                    if (fingersCount !== lastSentFingers && fingersCount > 0) {
+                        lastSentFingers = fingersCount;
+                        if (typeof Module.ccall === 'function') {
+                            Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
+                        }
+                    } else if (fingersCount === 0) {
+                        lastSentFingers = 0;
+                    }
+
+                } catch (err) {
+                    console.error("Ошибка обработки кадра:", err);
+                }
             }
+
+            requestAnimationFrame(processVideoFrame);
         }
     </script>
     
