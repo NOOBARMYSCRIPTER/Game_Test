@@ -172,7 +172,7 @@
                     
                     handLandmarker = await HandLandmarker.createFromOptions(vision, {
                         baseOptions: {
-                            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+                            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker_bundle.task",
                             delegate: "GPU"
                         },
                         runningMode: "IMAGE",
@@ -229,7 +229,21 @@
             };
         `;
 
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const mobilePolyfill = `
+            self.import = async function(url) {
+                if(url.includes("vision_bundle.mjs")) {
+                    importScripts("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/tasks_vision.js");
+                    return {
+                        FilesetResolver: mpTasksVision.FilesetResolver,
+                        HandLandmarker: mpTasksVision.HandLandmarker
+                    };
+                }
+                importScripts(url);
+                return self;
+            };
+        `;
+
+        const blob = new Blob([mobilePolyfill, workerCode], { type: 'application/javascript' });
         const workerUrl = URL.createObjectURL(blob);
         const worker = new Worker(workerUrl); 
 
@@ -315,18 +329,24 @@
             const videoElement = document.getElementById('webcam');
             const startBtn = document.getElementById('start-btn');
 
-            navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
-                .then(function(stream) {
-                    videoElement.srcObject = stream;
-                    videoElement.addEventListener('loadedmetadata', () => {
-                        cameraReady = true;
-                        checkReadyState();
-                    });
-                })
-                .catch(err => {
-                    console.error("Камера недоступна:", err);
-                    startBtn.innerText = 'ДОСТУП К КАМЕРЕ ЗАБЛОКИРОВАН';
+            navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: { ideal: 320 }, 
+                    height: { ideal: 240 },
+                    facingMode: "user"
+                } 
+            })
+            .then(function(stream) {
+                videoElement.srcObject = stream;
+                videoElement.addEventListener('loadedmetadata', () => {
+                    cameraReady = true;
+                    checkReadyState();
                 });
+            })
+            .catch(err => {
+                console.error("Камера недоступна:", err);
+                startBtn.innerText = 'ДОСТУП К КАМЕРЕ ЗАБЛОКИРОВАН';
+            });
         }
 
         function checkReadyState() {
