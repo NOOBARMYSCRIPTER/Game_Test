@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(EMSCRIPTEN)
     message(STATUS "Платформа: WebAssembly (Emscripten)")
 else()
-    message(FATAL_ERROR "Этот CMakeLists настроен строго под EMSCRIPTEN. Используйте emcmake cmaкe ..")
+    message(FATAL_ERROR "Этот CMakeLists настроен строго под EMSCRIPTEN. Используйте emcmake cmake ..")
 endif()
 
 include(FetchContent)
@@ -28,4 +28,11 @@ target_link_libraries(game PRIVATE raylib)
 set_target_properties(game PROPERTIES
     SUFFIX ".html"
     LINK_FLAGS "-sUSE_GLFW=3 -sASYNCIFY -sEXPORTED_FUNCTIONS=['_main','_StartGameSession','_RegisterGestureResult'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString'] --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/src/shell.html"
+)
+
+add_custom_command(
+    TARGET game
+    POST_BUILD
+    COMMAND ${CMAKE_CXX_COMPILER} "${CMAKE_CURRENT_SOURCE_DIR}/src/hand_worker.js" -O2 -o "${CMAKE_CURRENT_BINARY_DIR}/hand_worker.js"
+    COMMENT "Минификация hand_worker.js и копирование в директорию сборки..."
 )
