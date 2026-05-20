@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <title>Math Duel: Magic Caster</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -118,12 +119,19 @@
         }
         #gesture-value { color: #4ade80; font-size: 24px; }
 
-        #webcam { display: none; }
+        #webcam {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+            width: 320px;
+            height: 240px;
+            z-index: -1;
+        }
     </style>
 </head>
 <body>
 
-    <video id="webcam" autoplay playsinline muted width="640" height="480"></video>
+    <video id="webcam" autoplay playsinline muted width="320" height="240"></video>
 
     <div id="canvas-wrapper">
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
@@ -144,75 +152,17 @@
         </div>
     </div>
 
-    <script id="worker-code" type="javascript/worker">
-        self.importScripts('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js');
-
-        let hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 0,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        let offscreenCtx = null;
-        let offscreenCanvas = null;
-
-        hands.onResults((results) => {
-            let fingersCount = 0;
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                const fingerTips = [8, 12, 16, 20];
-                
-                fingerTips.forEach(tip => {
-                    if (landmarks[tip].y < landmarks[tip - 2].y) fingersCount++;
-                });
-
-                const isLeftHand = results.multiHandedness[0].label === 'Left';
-                if (isLeftHand) {
-                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
-                } else {
-                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
-                }
-            }
-            self.postMessage({ type: 'RESULTS', count: fingersCount });
-        });
-
-        self.onmessage = async (e) => {
-            if (e.data.type === 'PROCESS_FRAME') {
-                const img = e.data.img;
-
-                if (!offscreenCanvas) {
-                    offscreenCanvas = new OffscreenCanvas(img.width, img.height);
-                    offscreenCtx = offscreenCanvas.getContext('2d');
-                }
-
-                offscreenCtx.drawImage(img, 0, 0);
-                img.close();
-
-                try {
-                    await hands.send({ image: offscreenCanvas });
-                } catch (err) {}
-
-                self.postMessage({ type: 'READY' });
-            }
-        };
-    </script>
-
     <script type='text/javascript'>
         var Module = {
             canvas: (function() { return document.getElementById('canvas'); })()
         };
 
         let lastSentFingers = -1;
-        let worker = null;
-        let workerReady = true;
+        let hands = null;
+        let isProcessing = false;
 
         window.addEventListener('DOMContentLoaded', () => {
-            InitMediaPipeWorker();
+            InitMediaPipeDirect();
         });
 
         function ClickStartGame() {
@@ -260,55 +210,78 @@
             if (plate) plate.remove();
         };
 
-        function InitMediaPipeWorker() {
+        function InitMediaPipeDirect() {
             const videoElement = document.getElementById('webcam');
+            
+            hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
 
-            const blob = new Blob([document.getElementById('worker-code').textContent], { type: 'text/javascript' });
-            worker = new Worker(URL.createObjectURL(blob));
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 0,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
 
-            worker.onmessage = function(e) {
-                if (e.data.type === 'READY') {
-                    workerReady = true;
-                } 
-                else if (e.data.type === 'RESULTS') {
-                    const fingersCount = e.data.count;
-                    document.getElementById('gesture-value').innerText = fingersCount;
+            hands.onResults(onHandResults);
 
-                    if (fingersCount !== lastSentFingers && fingersCount > 0) {
-                        lastSentFingers = fingersCount;
-                        if (typeof Module.ccall === 'function') {
-                            Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
-                        }
-                    } else if (fingersCount === 0) {
-                        lastSentFingers = 0;
-                    }
-                }
-            };
-
-            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+            navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
                 .then(function(stream) {
                     videoElement.srcObject = stream;
                     videoElement.addEventListener('loadedmetadata', () => {
-                        requestAnimationFrame(sendFrameToWorker);
+                        setInterval(tickTracking, 80);
                     });
                 })
-                .catch(err => console.error("Доступ к камере отклонен или недоступен:", err));
+                .catch(err => console.error("Доступ к камере отклонен:", err));
         }
 
-        function sendFrameToWorker() {
+        async function tickTracking() {
             const videoElement = document.getElementById('webcam');
             
-            if (workerReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                workerReady = false;
+            if (!isProcessing && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                isProcessing = true;
+                try {
+                    await hands.send({ image: videoElement });
+                } catch (e) {
+                    isProcessing = false;
+                }
+            }
+        }
+
+        function onHandResults(results) {
+            let fingersCount = 0;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const fingerTips = [8, 12, 16, 20];
                 
-                createImageBitmap(videoElement).then(imageBitmap => {
-                    worker.postMessage({ type: 'PROCESS_FRAME', img: imageBitmap }, [imageBitmap]);
-                }).catch(() => {
-                    workerReady = true;
+                fingerTips.forEach(tip => {
+                    if (landmarks[tip].y < landmarks[tip - 3].y) {
+                        fingersCount++;
+                    }
                 });
+
+                const isLeftHand = results.multiHandedness[0].label === 'Left';
+                if (isLeftHand) {
+                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
+                } else {
+                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
+                }
             }
 
-            requestAnimationFrame(sendFrameToWorker);
+            document.getElementById('gesture-value').innerText = fingersCount;
+
+            if (fingersCount !== lastSentFingers && fingersCount > 0) {
+                lastSentFingers = fingersCount;
+                if (typeof Module.ccall === 'function') {
+                    Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
+                }
+            } else if (fingersCount === 0) {
+                lastSentFingers = 0;
+            }
+
+            isProcessing = false;
         }
     </script>
     
