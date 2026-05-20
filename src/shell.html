@@ -242,7 +242,7 @@
                 
                 handLandmarker = await mpTasksVision.HandLandmarker.createFromOptions(vision, {
                   baseOptions: {
-                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker_bundle/float16/1/hand_landmarker_bundle.task",
+                    modelAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/hand_landmarker.task",
                     delegate: "GPU"
                   },
                   runningMode: "VIDEO",
