@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Math Duel: Magic Caster</title>
     <style>
         body {
@@ -24,6 +25,7 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.7);
             border-radius: 8px;
             background-color: #000;
+            transform-origin: center center;
         }
 
         canvas.emscripten {
@@ -58,7 +60,7 @@
             border-radius: 8px;
         }
 
-        #start-screen { background: rgba(10, 10, 15, 0.85); }
+        #start-screen { background: rgba(10, 10, 15, 0.9); }
         #game-over-screen { background: rgba(30, 5, 5, 0.9); display: none; }
 
         .game-over-title {
@@ -86,26 +88,34 @@
 
         .monster-plate {
             position: absolute;
-            background: rgba(25, 25, 35, 0.95);
+            background: rgba(20, 20, 30, 0.95);
             border: 2px solid #ff4444;
-            padding: 10px 18px;
-            border-radius: 8px;
+            padding: 12px 20px;
+            border-radius: 10px;
             transform: translate(-50%, -120%);
             pointer-events: auto;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 6px;
-            box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+            gap: 4px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            transition: left 0.1s ease, top 0.1s ease;
         }
 
-        .challenge-text { font-size: 18px; font-weight: bold; color: #ff6b6b; }
+        .challenge-text { 
+            font-size: 22px; 
+            font-weight: 800; 
+            color: #ff6b6b; 
+            letter-spacing: 1px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
 
         #gesture-debug {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(20, 20, 30, 0.8);
+            background: rgba(20, 20, 30, 0.85);
             padding: 12px 20px;
             border-radius: 8px;
             border: 1px solid #444;
@@ -116,9 +126,47 @@
             align-items: center;
             gap: 10px;
         }
-        #gesture-value { color: #4ade80; font-size: 24px; }
+        #gesture-value { color: #4ade80; font-size: 26px; }
 
         #webcam { display: none; }
+
+        @media (max-width: 1300px) or (max-height: 740px) {
+            #canvas-wrapper {
+                transform: scale(var(--mobile-scale, 1));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .monster-plate {
+                padding: 16px 28px;
+                border-width: 3px;
+                border-color: #ff3333;
+                background: rgba(14, 14, 23, 0.98);
+                box-shadow: 0 12px 30px rgba(0,0,0,0.85);
+            }
+            
+            .challenge-text { 
+                font-size: 32px;
+                color: #ff4f4f;
+            }
+
+            .monster-hint {
+                font-size: 14px !important;
+                color: #fff !important;
+                font-weight: 600;
+            }
+
+            #gesture-debug {
+                top: 10px;
+                right: 10px;
+                padding: 8px 14px;
+                font-size: 14px;
+            }
+            #gesture-value { font-size: 20px; }
+            
+            .game-over-title { font-size: 36px; text-align: center; padding: 0 20px; }
+            .btn-ui { padding: 16px 36px; font-size: 22px; }
+        }
     </style>
 </head>
 <body>
@@ -129,7 +177,7 @@
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
         <div id="game-ui">
-            <div id="gesture-debug">Пальцев на камере: <span id="gesture-value">0</span></div>
+            <div id="gesture-debug">Пальцев: <span id="gesture-value">0</span></div>
 
             <div id="start-screen" class="screen-overlay">
                 <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ЯДРА И МОДЕЛИ...</button>
@@ -243,7 +291,25 @@
         const workerUrl = URL.createObjectURL(blob);
         const worker = new Worker(workerUrl); 
 
+        function resizeGameAdaptive() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            const baseWidth = 1280;
+            const baseHeight = 720;
+            
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            
+            const scaleX = windowWidth / baseWidth;
+            const scaleY = windowHeight / baseHeight;
+            const scale = Math.min(scaleX, scaleY, 1);
+            
+            document.documentElement.style.setProperty('--mobile-scale', scale);
+        }
+
+        window.addEventListener('resize', resizeGameAdaptive);
+
         window.addEventListener('DOMContentLoaded', () => {
+            resizeGameAdaptive();
             StartCameraImmediate();
             const startBtn = document.getElementById('start-btn');
             startBtn.innerText = "ЗАГРУЗКА ЯДРА И МОДЕЛИ...";
@@ -307,7 +373,7 @@
                 plate.className = 'monster-plate';
                 plate.innerHTML = `
                     <div class="challenge-text">${challengeText}</div>
-                    <div style="color: #aaa; font-size: 12px; text-align:center;">Покажи ответ</div>
+                    <div class="monster-hint" style="color: #aaa; font-size: 12px; text-align:center; transition: 0.2s;">Покажи ответ</div>
                 `;
                 container.appendChild(plate);
             }
