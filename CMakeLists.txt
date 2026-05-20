@@ -30,9 +30,13 @@ set_target_properties(game PROPERTIES
     LINK_FLAGS "-sUSE_GLFW=3 -sASYNCIFY -sEXPORTED_FUNCTIONS=['_main','_StartGameSession','_RegisterGestureResult'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString'] --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/src/shell.html"
 )
 
+find_program(NODE_EXECUTABLE node REQUIRED)
+
+get_filename_component(EMSCRIPTEN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+
 add_custom_command(
     TARGET game
     POST_BUILD
-    COMMAND ${CMAKE_CXX_COMPILER} "${CMAKE_CURRENT_SOURCE_DIR}/src/hand_worker.js" -O2 -o "${CMAKE_CURRENT_BINARY_DIR}/hand_worker.js"
+    COMMAND ${NODE_EXECUTABLE} "${EMSCRIPTEN_DIR}/tools/preprocessor.py" "${CMAKE_CURRENT_SOURCE_DIR}/src/hand_worker.js" "${CMAKE_CURRENT_BINARY_DIR}/hand_worker.js"
     COMMENT "Минификация hand_worker.js и копирование в директорию сборки..."
 )
