@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <random>
+#include <algorithm>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -15,7 +16,16 @@ struct Enemy {
     int expected_answer;
 };
 
+struct Projectile {
+    Vector2 position;
+    Vector2 target_pos;
+    int target_enemy_id;
+    float speed;
+    bool active;
+};
+
 std::vector<Enemy> g_enemies;
+std::vector<Projectile> g_projectiles;
 Vector2 g_playerPos = { 640.0f, 360.0f };
 int g_nextEntityId = 3;
 bool g_sessionStarted = false;
@@ -23,7 +33,7 @@ bool g_sessionStarted = false;
 std::string GenerateChallenge(int& out_answer) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dist(1, 10);
+    std::uniform_int_distribution<> dist(1, 5);
     int a = dist(gen);
     int b = dist(gen);
     out_answer = a + b;
@@ -44,6 +54,7 @@ void UpdateGame(float deltaTime) {
     for (auto& enemy : g_enemies) {
         Vector2 dir = { g_playerPos.x - enemy.position.x, g_playerPos.y - enemy.position.y };
         float length = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        
         if (length < 40.0f) {
             g_sessionStarted = false;
 #ifdef __EMSCRIPTEN__
@@ -53,12 +64,12 @@ void UpdateGame(float deltaTime) {
                 }
             });
 #endif
-            break; 
+            return; 
         }
-        
+
         if (length > 10.0f) { 
-            enemy.position.x += (dir.x / length) * 100.0f * deltaTime;
-            enemy.position.y += (dir.y / length) * 100.0f * deltaTime;
+            enemy.position.x += (dir.x / length) * 60.0f * deltaTime;
+            enemy.position.y += (dir.y / length) * 60.0f * deltaTime;
         }
 
         float pctX = enemy.position.x / 1280.0f;
@@ -72,6 +83,46 @@ void UpdateGame(float deltaTime) {
         }, enemy.id, enemy.challenge_text.c_str(), pctX, pctY);
 #endif
     }
+
+    for (auto& proj : g_projectiles) {
+        if (!proj.active) continue;
+
+        auto it = std::find_if(g_enemies.begin(), g_enemies.end(), [&](const Enemy& e) {
+            return e.id == proj.target_enemy_id;
+        });
+
+        Vector2 target = (it != g_enemies.end()) ? it->position : proj.target_pos;
+
+        Vector2 dir = { target.x - proj.position.x, target.y - proj.position.y };
+        float length = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+
+        if (length < 15.0f) {
+            proj.active = false;
+            if (it != g_enemies.end()) {
+#ifdef __EMSCRIPTEN__
+                MAIN_THREAD_EM_ASM({
+                    if (window.Module && window.Module.removeMonsterUI) {
+                        window.Module.removeMonsterUI($0);
+                    }
+                }, it->id);
+#endif
+                g_enemies.erase(it);
+
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<> sideDist(0, 1);
+                std::uniform_real_distribution<float> yDist(100.0f, 620.0f);
+                float spawnX = sideDist(gen) == 0 ? 50.0f : 1230.0f;
+                SpawnEnemy(spawnX, yDist(gen));
+            }
+        } else {
+            proj.position.x += (dir.x / length) * proj.speed * deltaTime;
+            proj.position.y += (dir.y / length) * proj.speed * deltaTime;
+        }
+    }
+
+    g_projectiles.erase(std::remove_if(g_projectiles.begin(), g_projectiles.end(), 
+        [](const Projectile& p) { return !p.active; }), g_projectiles.end());
 }
 
 void DrawGame() {
@@ -83,6 +134,12 @@ void DrawGame() {
 
         for (const auto& enemy : g_enemies) {
             DrawRectangle((int)enemy.position.x - 20, (int)enemy.position.y - 20, 40, 40, RED);
+        }
+
+        for (const auto& proj : g_projectiles) {
+            if (proj.active) {
+                DrawCircle((int)proj.position.x, (int)proj.position.y, 8.0f, YELLOW);
+            }
         }
     }
 
@@ -100,10 +157,28 @@ void GameLoop() {
 extern "C" {
     void EMSCRIPTEN_KEEPALIVE StartGameSession() {
         g_enemies.clear();
+        g_projectiles.clear();
         g_nextEntityId = 3;
-        SpawnEnemy(100.0f, 360.0f);
-        SpawnEnemy(1180.0f, 360.0f);
+        SpawnEnemy(100.0f, 200.0f);
+        SpawnEnemy(1180.0f, 500.0f);
         g_sessionStarted = true;
+    }
+
+    void EMSCRIPTEN_KEEPALIVE RegisterGestureResult(int fingersCount) {
+        if (!g_sessionStarted) return;
+
+        for (const auto& enemy : g_enemies) {
+            if (enemy.expected_answer == fingersCount) {
+                Projectile p;
+                p.position = g_playerPos;
+                p.target_pos = enemy.position;
+                p.target_enemy_id = enemy.id;
+                p.speed = 500.0f;
+                p.active = true;
+                g_projectiles.push_back(p);
+                break;
+            }
+        }
     }
 }
 
