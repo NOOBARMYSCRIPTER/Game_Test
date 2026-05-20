@@ -3,7 +3,6 @@
 <head>
     <meta charset="utf-8">
     <title>Math Duel: Magic Caster</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -119,14 +118,7 @@
         }
         #gesture-value { color: #4ade80; font-size: 24px; }
 
-        #webcam {
-            position: absolute;
-            opacity: 0;
-            pointer-events: none;
-            width: 320px;
-            height: 240px;
-            z-index: -1;
-        }
+        #webcam { display: none; }
     </style>
 </head>
 <body>
@@ -140,7 +132,7 @@
             <div id="gesture-debug">Пальцев на камере: <span id="gesture-value">0</span></div>
 
             <div id="start-screen" class="screen-overlay">
-                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()">НАЧАТЬ ИГРУ</button>
+                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА КАМЕРЫ...</button>
             </div>
 
             <div id="game-over-screen" class="screen-overlay">
@@ -158,11 +150,11 @@
         };
 
         let lastSentFingers = -1;
-        let hands = null;
-        let isProcessing = false;
+        let worker = null;
+        let workerReady = false;
 
         window.addEventListener('DOMContentLoaded', () => {
-            InitMediaPipeDirect();
+            InitMediaPipeWorker();
         });
 
         function ClickStartGame() {
@@ -210,78 +202,61 @@
             if (plate) plate.remove();
         };
 
-        function InitMediaPipeDirect() {
+        function InitMediaPipeWorker() {
             const videoElement = document.getElementById('webcam');
-            
-            hands = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-            });
+            const startBtn = document.getElementById('start-btn');
 
-            hands.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 0,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
+            worker = new Worker('hand_worker.js');
 
-            hands.onResults(onHandResults);
+            worker.onmessage = function(e) {
+                if (e.data.type === 'TRACKER_READY') {
+                    workerReady = true;
+                    startBtn.removeAttribute('disabled');
+                    startBtn.style.opacity = '1';
+                    startBtn.innerText = 'НАЧАТЬ ИГРУ';
+                } 
+                else if (e.data.type === 'RESULTS') {
+                    const fingersCount = e.data.count;
+                    document.getElementById('gesture-value').innerText = fingersCount;
+
+                    if (fingersCount !== lastSentFingers && fingersCount > 0) {
+                        lastSentFingers = fingersCount;
+                        if (typeof Module.ccall === 'function') {
+                            Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
+                        }
+                    } else if (fingersCount === 0) {
+                        lastSentFingers = 0;
+                    }
+                    
+                    setTimeout(sendNextFrame, 60); 
+                }
+            };
 
             navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
                 .then(function(stream) {
                     videoElement.srcObject = stream;
                     videoElement.addEventListener('loadedmetadata', () => {
-                        setInterval(tickTracking, 80);
+                        sendNextFrame();
                     });
                 })
-                .catch(err => console.error("Доступ к камере отклонен:", err));
-        }
-
-        async function tickTracking() {
-            const videoElement = document.getElementById('webcam');
-            
-            if (!isProcessing && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                isProcessing = true;
-                try {
-                    await hands.send({ image: videoElement });
-                } catch (e) {
-                    isProcessing = false;
-                }
-            }
-        }
-
-        function onHandResults(results) {
-            let fingersCount = 0;
-
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                const fingerTips = [8, 12, 16, 20];
-                
-                fingerTips.forEach(tip => {
-                    if (landmarks[tip].y < landmarks[tip - 3].y) {
-                        fingersCount++;
-                    }
+                .catch(err => {
+                    console.error("Камера недоступна:", err);
+                    startBtn.innerText = 'ОШИБКА КАМЕРЫ';
                 });
+        }
 
-                const isLeftHand = results.multiHandedness[0].label === 'Left';
-                if (isLeftHand) {
-                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
-                } else {
-                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
-                }
+        function sendNextFrame() {
+            const videoElement = document.getElementById('webcam');
+
+            if (workerReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                createImageBitmap(videoElement).then(imageBitmap => {
+                    worker.postMessage({ type: 'PROCESS_FRAME', img: imageBitmap }, [imageBitmap]);
+                }).catch(() => {
+                    setTimeout(sendNextFrame, 60);
+                });
+            } else {
+                setTimeout(sendNextFrame, 100);
             }
-
-            document.getElementById('gesture-value').innerText = fingersCount;
-
-            if (fingersCount !== lastSentFingers && fingersCount > 0) {
-                lastSentFingers = fingersCount;
-                if (typeof Module.ccall === 'function') {
-                    Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
-                }
-            } else if (fingersCount === 0) {
-                lastSentFingers = 0;
-            }
-
-            isProcessing = false;
         }
     </script>
     
