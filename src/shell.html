@@ -46,11 +46,11 @@
             pointer-events: none;
         }
 
-        #start-screen {
+        .screen-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(10, 10, 15, 0.85);
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 20;
@@ -58,20 +58,49 @@
             border-radius: 8px;
         }
 
-        .btn-start {
+        #start-screen {
+            background: rgba(10, 10, 15, 0.85);
+        }
+
+        #game-over-screen {
+            background: rgba(30, 5, 5, 0.9);
+            display: none;
+        }
+
+        .game-over-title {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff4444;
+            margin-bottom: 20px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .btn-ui {
             padding: 18px 45px;
             font-size: 26px;
             font-weight: bold;
-            background: #2463eb;
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            box-shadow: 0 5px 15px rgba(36, 99, 235, 0.4);
             transition: 0.2s;
+        }
+
+        .btn-start {
+            background: #2463eb;
+            box-shadow: 0 5px 15px rgba(36, 99, 235, 0.4);
         }
         .btn-start:hover { 
             background: #1d4ed8; 
+            transform: scale(1.05);
+        }
+
+        .btn-restart {
+            background: #dc2626;
+            box-shadow: 0 5px 15px rgba(220, 38, 38, 0.4);
+        }
+        .btn-restart:hover { 
+            background: #b91c1c; 
             transform: scale(1.05);
         }
 
@@ -118,8 +147,13 @@
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
         <div id="game-ui">
-            <div id="start-screen">
-                <button class="btn-start" id="start-btn" onclick="ClickStartGame()">НАЧАТЬ ИГРУ</button>
+            <div id="start-screen" class="screen-overlay">
+                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()">НАЧАТЬ ИГРУ</button>
+            </div>
+
+            <div id="game-over-screen" class="screen-overlay">
+                <div class="game-over-title">Монстры поглотили тебя!</div>
+                <button class="btn-ui btn-restart" onclick="ClickRestartGame()">ПОПРОБОВАТЬ СНОВА</button>
             </div>
 
             <div id="monsters-container"></div>
@@ -137,21 +171,36 @@
         function ClickStartGame() {
             console.log("JS: Клик по кнопке старта!");
             document.getElementById('start-screen').style.display = 'none';
-            
+            StartSession();
+        }
+
+        function ClickRestartGame() {
+            console.log("JS: Перезапуск сессии!");
+            document.getElementById('game-over-screen').style.display = 'none';
+            StartSession();
+        }
+
+        function StartSession() {
             if (typeof Module.ccall === 'function') {
                 Module.ccall('StartGameSession', null, [], []);
-                console.log("JS: Сигнал StartGameSession отправлен в C++");
             } else {
-                console.error("Критическая ошибка: Функции Emscripten (ccall) еще не готовы!");
+                console.error("Функции Emscripten (ccall) еще не готовы!");
             }
         }
+
+        Module.showGameOver = function() {
+            console.log("JS: Получен сигнал Game Over из WASM!");
+
+            document.getElementById('game-over-screen').style.display = 'flex';
+            
+            document.getElementById('monsters-container').innerHTML = '';
+        };
 
         Module.updateMonsterUI = function(id, challengeText, pctX, pctY) {
             let container = document.getElementById('monsters-container');
             let plate = document.getElementById('monster-' + id);
 
             if (!plate) {
-                console.log("JS: Создаем новую плашку для монстра ID: " + id);
                 plate = document.createElement('div');
                 plate.id = 'monster-' + id;
                 plate.className = 'monster-plate';
