@@ -3,7 +3,6 @@
 <head>
     <meta charset="utf-8">
     <title>Math Duel: Magic Caster</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -145,19 +144,66 @@
         </div>
     </div>
 
+    <script id="worker-code" type="javascript/worker">
+        self.importScripts('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js');
+
+        let hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            let fingersCount = 0;
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const fingerTips = [8, 12, 16, 20];
+                
+                fingerTips.forEach(tip => {
+                    if (landmarks[tip].y < landmarks[tip - 2].y) fingersCount++;
+                });
+
+                const isLeftHand = results.multiHandedness[0].label === 'Left';
+                if (isLeftHand) {
+                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
+                } else {
+                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
+                }
+            }
+            self.postMessage({ type: 'RESULTS', count: fingersCount });
+        });
+
+        self.onmessage = async (e) => {
+            if (e.data.type === 'PROCESS_FRAME') {
+                try {
+                    await hands.send({ image: e.data.img });
+                } catch (err) {}
+                self.postMessage({ type: 'READY' });
+            }
+        };
+    </script>
+
     <script type='text/javascript'>
         var Module = {
             canvas: (function() { return document.getElementById('canvas'); })()
         };
 
         let lastSentFingers = -1;
-        let isProcessing = false;
-        let hands = null;
+        let worker = null;
+        let workerReady = true;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            InitMediaPipeWorker();
+        });
 
         function ClickStartGame() {
             document.getElementById('start-screen').style.display = 'none';
             StartSession();
-            InitMediaPipe();
         }
 
         function ClickRestartGame() {
@@ -200,84 +246,55 @@
             if (plate) plate.remove();
         };
 
-        function InitMediaPipe() {
-            if (hands !== null) return;
-
+        function InitMediaPipeWorker() {
             const videoElement = document.getElementById('webcam');
-            
-            hands = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-            });
 
-            hands.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 0,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
+            const blob = new Blob([document.getElementById('worker-code').textContent], { type: 'text/javascript' });
+            worker = new Worker(URL.createObjectURL(blob));
 
-            hands.onResults(onHandResults);
+            worker.onmessage = function(e) {
+                if (e.data.type === 'READY') {
+                    workerReady = true;
+                } 
+                else if (e.data.type === 'RESULTS') {
+                    const fingersCount = e.data.count;
+                    document.getElementById('gesture-value').innerText = fingersCount;
+
+                    if (fingersCount !== lastSentFingers && fingersCount > 0) {
+                        lastSentFingers = fingersCount;
+                        if (typeof Module.ccall === 'function') {
+                            Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
+                        }
+                    } else if (fingersCount === 0) {
+                        lastSentFingers = 0;
+                    }
+                }
+            };
 
             navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
                 .then(function(stream) {
                     videoElement.srcObject = stream;
                     videoElement.addEventListener('loadedmetadata', () => {
-                        requestAnimationFrame(processVideoFrame);
+                        requestAnimationFrame(sendFrameToWorker);
                     });
                 })
-                .catch(err => console.error("Ошибка доступа к камере:", err));
+                .catch(err => console.error("Доступ к камере отклонен или недоступен:", err));
         }
 
-        async function processVideoFrame() {
+        function sendFrameToWorker() {
             const videoElement = document.getElementById('webcam');
             
-            if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA && !isProcessing) {
-                isProcessing = true;
-                try {
-                    // Передаем кадр асинхронно
-                    await hands.send({ image: videoElement });
-                } catch (e) {
-                    console.error("MediaPipe ошибка фрейма:", e);
-                    isProcessing = false;
-                }
-            }
-            
-            requestAnimationFrame(processVideoFrame);
-        }
-
-        function onHandResults(results) {
-            let fingersCount = 0;
-
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                const fingerTips = [8, 12, 16, 20];
+            if (workerReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                workerReady = false;
                 
-                fingerTips.forEach(tip => {
-                    if (landmarks[tip].y < landmarks[tip - 2].y) {
-                        fingersCount++;
-                    }
+                createImageBitmap(videoElement).then(imageBitmap => {
+                    worker.postMessage({ type: 'PROCESS_FRAME', img: imageBitmap }, [imageBitmap]);
+                }).catch(() => {
+                    workerReady = true;
                 });
-
-                const isLeftHand = results.multiHandedness[0].label === 'Left';
-                if (isLeftHand) {
-                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
-                } else {
-                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
-                }
             }
 
-            document.getElementById('gesture-value').innerText = fingersCount;
-
-            if (fingersCount !== lastSentFingers && fingersCount > 0) {
-                lastSentFingers = fingersCount;
-                if (typeof Module.ccall === 'function') {
-                    Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
-                }
-            } else if (fingersCount === 0) {
-                lastSentFingers = 0;
-            }
-
-            isProcessing = false;
+            requestAnimationFrame(sendFrameToWorker);
         }
     </script>
     
