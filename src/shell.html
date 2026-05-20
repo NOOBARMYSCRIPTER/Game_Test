@@ -160,20 +160,20 @@
         offscreenCanvas.height = 240;
 
         const workerCode = `
-            importScripts("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/vision_wasm_internal.js");
+            import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
         
             let handLandmarker;
         
             async function init() {
                 try {
-                    const vision = await createMediaPipeSolutions.FilesetResolver.forVisionTasks(
+                    const vision = await FilesetResolver.forVisionTasks(
                         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
                     );
                     
-                    handLandmarker = await createMediaPipeSolutions.HandLandmarker.createFromOptions(vision, {
+                    handLandmarker = await HandLandmarker.createFromOptions(vision, {
                         baseOptions: {
                             modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-                            delegate: "GPU"
+                            delegate: "CPU" 
                         },
                         runningMode: "IMAGE",
                         numHands: 2
@@ -191,6 +191,7 @@
                 if (e.data.type === 'PROCESS_FRAME' && handLandmarker) {
                     try {
                         const { imageData } = e.data;
+                        
                         const results = handLandmarker.detect(imageData);
                         
                         let totalFingers = 0;
@@ -223,7 +224,7 @@
         
                         self.postMessage({ type: 'RESULT', fingersCount: totalFingers });
                     } catch(err) {
-                        self.postMessage({ type: 'RESULT', fingersCount: 0 });
+                        self.postMessage({ type: 'RESULT', fingersCount: 0, error: err.toString() });
                     }
                 }
             };
@@ -231,7 +232,7 @@
 
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         const workerUrl = URL.createObjectURL(blob);
-        const worker = new Worker(workerUrl); 
+        const worker = new Worker(workerUrl, { type: 'module' }); 
 
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
