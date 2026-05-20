@@ -4,11 +4,13 @@ let handLandmarker = null;
 
 async function initTracker() {
     try {
-        console.log("[Worker] Загрузка ассетов MediaPipe v2...");
+        self.postMessage({ type: 'STATUS', msg: 'Загрузка ядра MediaPipe...' });
         
         const vision = await FilesetResolver.forVisionTasks(
             "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
         );
+        
+        self.postMessage({ type: 'STATUS', msg: 'Скачивание ИИ-модели (15MB)...' });
         
         handLandmarker = await HandLandmarker.createFromOptions(vision, {
             baseOptions: {
@@ -19,11 +21,11 @@ async function initTracker() {
             numHands: 1
         });
         
-        console.log("[Worker] Модель успешно инициализирована!");
         self.postMessage({ type: 'TRACKER_READY' });
 
     } catch (error) {
-        console.error("[Worker] Критическая ошибка инициализации трекера:", error);
+        self.postMessage({ type: 'STATUS', msg: 'ОШИБКА СЕТИ ИЛИ МОДЕЛИ' });
+        console.error("[Worker] Ошибка:", error);
     }
 }
 
@@ -37,21 +39,17 @@ self.onmessage = async (e) => {
         }
 
         const imgBitmap = e.data.img;
-        
         try {
             const results = handLandmarker.detect(imgBitmap);
             imgBitmap.close();
 
             let fingersCount = 0;
-
             if (results.landmarks && results.landmarks.length > 0) {
                 const landmarks = results.landmarks[0];
                 const fingerTips = [8, 12, 16, 20];
                 
                 fingerTips.forEach(tip => {
-                    if (landmarks[tip].y < landmarks[tip - 3].y) {
-                        fingersCount++;
-                    }
+                    if (landmarks[tip].y < landmarks[tip - 3].y) fingersCount++;
                 });
 
                 if (results.handedness && results.handedness.length > 0) {
@@ -63,9 +61,7 @@ self.onmessage = async (e) => {
                     }
                 }
             }
-
             self.postMessage({ type: 'RESULTS', count: fingersCount });
-
         } catch (err) {
             imgBitmap.close();
             self.postMessage({ type: 'RESULTS', count: 0 });
