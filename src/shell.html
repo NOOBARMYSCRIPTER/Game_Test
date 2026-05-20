@@ -3,7 +3,6 @@
 <head>
     <meta charset="utf-8">
     <title>Math Duel: Magic Caster</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
@@ -125,7 +124,7 @@
 </head>
 <body>
 
-    <video id="webcam" autoplay playsinline></video>
+    <video id="webcam" autoplay playsinline muted width="640" height="480"></video>
 
     <div id="canvas-wrapper">
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
@@ -152,6 +151,8 @@
         };
 
         let lastSentFingers = -1;
+        let isProcessing = false;
+        let hands = null;
 
         function ClickStartGame() {
             document.getElementById('start-screen').style.display = 'none';
@@ -200,28 +201,48 @@
         };
 
         function InitMediaPipe() {
+            if (hands !== null) return;
+
             const videoElement = document.getElementById('webcam');
-            const hands = new Hands({
+            
+            hands = new Hands({
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
             });
 
             hands.setOptions({
                 maxNumHands: 1,
-                modelComplexity: 1,
+                modelComplexity: 0,
                 minDetectionConfidence: 0.5,
                 minTrackingConfidence: 0.5
             });
 
             hands.onResults(onHandResults);
 
-            const camera = new Camera(videoElement, {
-                onFrame: async () => {
+            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+                .then(function(stream) {
+                    videoElement.srcObject = stream;
+                    videoElement.addEventListener('loadedmetadata', () => {
+                        requestAnimationFrame(processVideoFrame);
+                    });
+                })
+                .catch(err => console.error("Ошибка доступа к камере:", err));
+        }
+
+        async function processVideoFrame() {
+            const videoElement = document.getElementById('webcam');
+            
+            if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA && !isProcessing) {
+                isProcessing = true;
+                try {
+                    // Передаем кадр асинхронно
                     await hands.send({ image: videoElement });
-                },
-                width: 640,
-                height: 480
-            });
-            camera.start().catch(err => console.error("Ошибка доступа к камере:", err));
+                } catch (e) {
+                    console.error("MediaPipe ошибка фрейма:", e);
+                    isProcessing = false;
+                }
+            }
+            
+            requestAnimationFrame(processVideoFrame);
         }
 
         function onHandResults(results) {
@@ -229,8 +250,8 @@
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
-
                 const fingerTips = [8, 12, 16, 20];
+                
                 fingerTips.forEach(tip => {
                     if (landmarks[tip].y < landmarks[tip - 2].y) {
                         fingersCount++;
@@ -255,6 +276,8 @@
             } else if (fingersCount === 0) {
                 lastSentFingers = 0;
             }
+
+            isProcessing = false;
         }
     </script>
     
