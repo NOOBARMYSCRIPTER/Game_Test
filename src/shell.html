@@ -161,6 +161,7 @@
 
         const workerCode = `
             importScripts("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm/vision_wasm_internal.js");
+            const { FilesetResolver, HandLandmarker } = createMediaPipeSolutions;
 
             let handLandmarker;
 
