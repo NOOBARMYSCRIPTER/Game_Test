@@ -172,15 +172,6 @@ extern "C" {
         g_sessionStarted = true;
     }
 
-    void EMSCRIPTEN_KEEPALIVE StartGameSession() {
-        g_enemies.clear();
-        g_projectiles.clear();
-        g_nextEntityId = 3;
-        SpawnEnemy(100.0f, 200.0f);
-        SpawnEnemy(1180.0f, 500.0f);
-        g_sessionStarted = true;
-    }
-
     void EMSCRIPTEN_KEEPALIVE RegisterGestureResult(int fingersCount) {
         if (!g_sessionStarted) return;
 
