@@ -231,26 +231,33 @@
         
         async function InitMediaPipeMainThread() {
               const startBtn = document.getElementById('start-btn');
+              
+              let gameModuleBackup = undefined;
+              
               try {
                 startBtn.innerText = "ЗАГРУЗКА ЯДРА...";
                 
-                const gameModuleBackup = window.Module;
+                gameModuleBackup = window.Module;
                 window.Module = undefined; 
                 
-                const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm");
+                const vision = await FilesetResolver.forVisionTasks("https://jsdelivr.net");
                 
                 startBtn.innerText = "СКАЧИВАНИЕ МОДЕЛИ (15MB)...";
                 
+                const stableModelUrl = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+                
                 handLandmarker = await HandLandmarker.createFromOptions(vision, {
                   baseOptions: {
-                    modelAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/hand_landmarker.task",
+                    modelAssetPath: stableModelUrl,
                     delegate: "GPU"
                   },
                   runningMode: "VIDEO",
                   numHands: 1
                 });
                 
-                window.Module = gameModuleBackup;
+                if (gameModuleBackup) {
+                    window.Module = gameModuleBackup;
+                }
                 
                 aiReady = true;
                 checkReadyState();
@@ -258,7 +265,7 @@
                 console.error("Ошибка MediaPipe: ", err);
                 startBtn.innerText = "ОШИБКА ЗАГРУЗКИ СЕТИ";
                 
-                if (!window.Module && gameModuleBackup) {
+                if (gameModuleBackup) {
                     window.Module = gameModuleBackup;
                 }
               }
