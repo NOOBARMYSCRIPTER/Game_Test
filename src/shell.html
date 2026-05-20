@@ -3,6 +3,8 @@
 <head>
     <meta charset="utf-8">
     <title>Math Duel: Magic Caster</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -58,14 +60,8 @@
             border-radius: 8px;
         }
 
-        #start-screen {
-            background: rgba(10, 10, 15, 0.85);
-        }
-
-        #game-over-screen {
-            background: rgba(30, 5, 5, 0.9);
-            display: none;
-        }
+        #start-screen { background: rgba(10, 10, 15, 0.85); }
+        #game-over-screen { background: rgba(30, 5, 5, 0.9); display: none; }
 
         .game-over-title {
             font-size: 48px;
@@ -85,24 +81,10 @@
             cursor: pointer;
             transition: 0.2s;
         }
-
-        .btn-start {
-            background: #2463eb;
-            box-shadow: 0 5px 15px rgba(36, 99, 235, 0.4);
-        }
-        .btn-start:hover { 
-            background: #1d4ed8; 
-            transform: scale(1.05);
-        }
-
-        .btn-restart {
-            background: #dc2626;
-            box-shadow: 0 5px 15px rgba(220, 38, 38, 0.4);
-        }
-        .btn-restart:hover { 
-            background: #b91c1c; 
-            transform: scale(1.05);
-        }
+        .btn-start { background: #2463eb; box-shadow: 0 5px 15px rgba(36, 99, 235, 0.4); }
+        .btn-start:hover { background: #1d4ed8; transform: scale(1.05); }
+        .btn-restart { background: #dc2626; box-shadow: 0 5px 15px rgba(220, 38, 38, 0.4); }
+        .btn-restart:hover { background: #b91c1c; transform: scale(1.05); }
 
         .monster-plate {
             position: absolute;
@@ -119,34 +101,38 @@
             box-shadow: 0 6px 16px rgba(0,0,0,0.5);
         }
 
-        .challenge-text {
+        .challenge-text { font-size: 18px; font-weight: bold; color: #ff6b6b; }
+
+        #gesture-debug {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(20, 20, 30, 0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
             font-size: 18px;
             font-weight: bold;
-            color: #ff6b6b;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
+        #gesture-value { color: #4ade80; font-size: 24px; }
 
-        .monster-input {
-            width: 70px;
-            background: #1a1a1f;
-            border: 2px solid #444;
-            color: #fff;
-            padding: 5px;
-            text-align: center;
-            font-size: 18px;
-            border-radius: 6px;
-            outline: none;
-        }
-        .monster-input:focus {
-            border-color: #ff4444;
-        }
+        #webcam { display: none; }
     </style>
 </head>
 <body>
+
+    <video id="webcam" autoplay playsinline></video>
 
     <div id="canvas-wrapper">
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
         <div id="game-ui">
+            <div id="gesture-debug">Пальцев на камере: <span id="gesture-value">0</span></div>
+
             <div id="start-screen" class="screen-overlay">
                 <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()">НАЧАТЬ ИГРУ</button>
             </div>
@@ -162,20 +148,18 @@
 
     <script type='text/javascript'>
         var Module = {
-            canvas: (function() {
-                var canvas = document.getElementById('canvas');
-                return canvas;
-            })()
+            canvas: (function() { return document.getElementById('canvas'); })()
         };
 
+        let lastSentFingers = -1;
+
         function ClickStartGame() {
-            console.log("JS: Клик по кнопке старта!");
             document.getElementById('start-screen').style.display = 'none';
             StartSession();
+            InitMediaPipe();
         }
 
         function ClickRestartGame() {
-            console.log("JS: Перезапуск сессии!");
             document.getElementById('game-over-screen').style.display = 'none';
             StartSession();
         }
@@ -183,16 +167,11 @@
         function StartSession() {
             if (typeof Module.ccall === 'function') {
                 Module.ccall('StartGameSession', null, [], []);
-            } else {
-                console.error("Функции Emscripten (ccall) еще не готовы!");
             }
         }
 
         Module.showGameOver = function() {
-            console.log("JS: Получен сигнал Game Over из WASM!");
-
             document.getElementById('game-over-screen').style.display = 'flex';
-            
             document.getElementById('monsters-container').innerHTML = '';
         };
 
@@ -206,17 +185,77 @@
                 plate.className = 'monster-plate';
                 plate.innerHTML = `
                     <div class="challenge-text">${challengeText}</div>
-                    <input type="number" class="monster-input" placeholder="?" id="input-${id}">
+                    <div style="color: #aaa; font-size: 12px; text-align:center;">Покажи ответ</div>
                 `;
                 container.appendChild(plate);
             }
 
-            let pixelX = pctX * 1280;
-            let pixelY = pctY * 720;
-
-            plate.style.left = pixelX + 'px';
-            plate.style.top = pixelY + 'px';
+            plate.style.left = (pctX * 1280) + 'px';
+            plate.style.top = (pctY * 720) + 'px';
         };
+
+        Module.removeMonsterUI = function(id) {
+            let plate = document.getElementById('monster-' + id);
+            if (plate) plate.remove();
+        };
+
+        function InitMediaPipe() {
+            const videoElement = document.getElementById('webcam');
+            const hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults(onHandResults);
+
+            const camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({ image: videoElement });
+                },
+                width: 640,
+                height: 480
+            });
+            camera.start().catch(err => console.error("Ошибка доступа к камере:", err));
+        }
+
+        function onHandResults(results) {
+            let fingersCount = 0;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+
+                const fingerTips = [8, 12, 16, 20];
+                fingerTips.forEach(tip => {
+                    if (landmarks[tip].y < landmarks[tip - 2].y) {
+                        fingersCount++;
+                    }
+                });
+
+                const isLeftHand = results.multiHandedness[0].label === 'Left';
+                if (isLeftHand) {
+                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
+                } else {
+                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
+                }
+            }
+
+            document.getElementById('gesture-value').innerText = fingersCount;
+
+            if (fingersCount !== lastSentFingers && fingersCount > 0) {
+                lastSentFingers = fingersCount;
+                if (typeof Module.ccall === 'function') {
+                    Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
+                }
+            } else if (fingersCount === 0) {
+                lastSentFingers = 0;
+            }
+        }
     </script>
     
     {{{ SCRIPT }}}
