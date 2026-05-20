@@ -23,19 +23,26 @@
 
         #canvas-wrapper {
             position: relative;
-            width: 1280px;
-            height: 720px;
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
             box-shadow: 0 10px 30px rgba(0,0,0,0.7);
-            border-radius: 8px;
             background-color: #000;
+        }
+        
+        @media (max-aspect-ratio: 16/9) {
+            #canvas-wrapper {
+                width: 100vw;
+                height: calc(100vw * 9 / 16);
+            }
         }
 
         canvas.emscripten {
             position: absolute;
             top: 0;
             left: 0;
-            width: 1280px !important;
-            height: 720px !important;
+            width: 100% !important;
+            height: 100% !important;
             border: none;
             z-index: 1;
         }
@@ -44,44 +51,10 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 1280px;
-            height: 720px;
+            width: 100%;
+            height: 100%;
             z-index: 10;
             pointer-events: none;
-        }
-
-        .monster-plate {
-            position: absolute;
-            background: rgba(20, 20, 30, 0.95);
-            border: 2px solid #ff4444;
-            padding: 10px 18px;
-            border-radius: 10px;
-            transform: translate(-50%, -130%);
-            pointer-events: auto;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.7);
-            backdrop-filter: blur(4px);
-            transition: transform 0.1s ease-out;
-        }
-
-        .challenge-text { 
-            font-size: 22px; 
-            font-weight: 900; 
-            color: #ff6b6b; 
-            letter-spacing: 1px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-        }
-
-        .challenge-hint {
-            color: #22c55e; 
-            font-size: 13px; 
-            font-weight: bold;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
         .screen-overlay {
@@ -93,129 +66,120 @@
             align-items: center;
             z-index: 20;
             pointer-events: auto;
-            border-radius: 8px;
         }
 
         #start-screen { background: rgba(10, 10, 15, 0.9); }
-        #game-over-screen { background: rgba(35, 7, 7, 0.95); display: none; }
+        #game-over-screen { background: rgba(30, 5, 5, 0.93); display: none; }
 
         .game-over-title {
-            font-size: 48px;
+            font-size: 5vw;
+            max-size: 48px;
             font-weight: bold;
             color: #ff4444;
-            margin-bottom: 25px;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.7);
+            margin-bottom: 20px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
             text-align: center;
         }
 
         .btn-ui {
-            padding: 18px 45px;
-            font-size: 24px;
+            padding: 14px 35px;
+            font-size: 4vw;
+            max-font-size: 26px;
             font-weight: bold;
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: transform 0.2s, background-color 0.2s;
+            transition: 0.2s;
         }
-        .btn-start { background: #2563eb; box-shadow: 0 6px 20px rgba(36, 99, 235, 0.5); }
+        
+        @media (min-width: 769px) {
+            .game-over-title { font-size: 48px; }
+            .btn-ui { font-size: 26px; padding: 18px 45px; }
+        }
+        
+        .btn-start { background: #2463eb; box-shadow: 0 5px 15px rgba(36, 99, 235, 0.4); }
         .btn-start:hover { background: #1d4ed8; transform: scale(1.05); }
-        .btn-restart { background: #dc2626; box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5); }
+        .btn-restart { background: #dc2626; box-shadow: 0 5px 15px rgba(220, 38, 38, 0.4); }
         .btn-restart:hover { background: #b91c1c; transform: scale(1.05); }
+
+        .monster-plate {
+            position: absolute;
+            background: rgba(15, 15, 22, 0.95);
+            border: 2px solid #ff4444;
+            padding: 8px 14px;
+            border-radius: 8px;
+            transform: translate(-50%, -100%);
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+            transition: left 0.1s linear, top 0.1s linear;
+        }
+
+        .challenge-text { 
+            font-size: 20px; 
+            font-weight: 900; 
+            color: #ff5555; 
+            text-shadow: 0 0 10px rgba(255,68,68,0.3);
+            letter-spacing: 1px;
+        }
+
+        @media (max-width: 768px) {
+            .monster-plate {
+                background: #1a1a24;
+                border: 3px solid #ff3b30;
+                padding: 12px 20px;
+                border-radius: 12px;
+                box-shadow: 0 0 15px rgba(255, 59, 48, 0.4), inset 0 0 8px rgba(0,0,0,0.8);
+            }
+            .challenge-text { 
+                font-size: 28px;
+                color: #ff3b30;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            }
+            #gesture-debug {
+                padding: 8px 12px !important;
+                font-size: 14px !important;
+            }
+            #gesture-value { font-size: 18px !important; }
+        }
 
         #gesture-debug {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(15, 15, 25, 0.85);
+            top: 15px;
+            right: 15px;
+            background: rgba(20, 20, 30, 0.85);
             padding: 12px 20px;
-            border-radius: 10px;
-            border: 1px solid #3f3f46;
-            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            font-size: 18px;
             font-weight: bold;
             z-index: 30;
             display: flex;
             align-items: center;
             gap: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            pointer-events: none;
         }
-        #gesture-value { color: #22c55e; font-size: 26px; font-weight: 800; }
+        #gesture-value { color: #4ade80; font-size: 24px; }
 
         #webcam { display: none; }
-
-        @media (max-width: 1024px), (orientation: portrait) {
-            #canvas-wrapper {
-                width: 100vw !important;
-                height: 100vh !important;
-                border-radius: 0;
-            }
-
-            canvas.emscripten {
-                width: 100vw !important;
-                height: 100vh !important;
-            }
-
-            #game-ui {
-                width: 100vw !important;
-                height: 100vh !important;
-            }
-
-            .screen-overlay {
-                border-radius: 0;
-            }
-
-            .monster-plate {
-                padding: 14px 24px;
-                border: 3px solid #ff4444;
-                border-radius: 14px;
-                transform: translate(-50%, -140%);
-                box-shadow: 0 12px 32px rgba(0,0,0,0.8);
-            }
-
-            .challenge-text {
-                font-size: 32px;
-                letter-spacing: 2px;
-            }
-
-            .challenge-hint {
-                font-size: 16px;
-            }
-
-            .game-over-title {
-                font-size: 36px;
-                padding: 0 20px;
-            }
-
-            .btn-ui {
-                width: 85%;
-                max-width: 340px;
-                font-size: 22px;
-                padding: 20px 0;
-            }
-
-            #gesture-debug {
-                top: auto;
-                bottom: 20px;
-                right: 50%;
-                transform: translateX(50%);
-                font-size: 14px;
-                white-space: nowrap;
-            }
-        }
     </style>
 </head>
 <body>
 
     <video id="webcam" autoplay playsinline muted width="320" height="240"></video>
 
-    <div id="canvas-wrapper">
+    <div id="canvas-wrapper" id="wrapper">
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
         <div id="game-ui">
-            <div id="gesture-debug">Пальцев в кадре: <span id="gesture-value">0</span></div>
+            <div id="gesture-debug">Камера: <span id="gesture-value">0</span></div>
 
             <div id="start-screen" class="screen-overlay">
-                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ИИ-МОДЕЛИ...</button>
+                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ЯДРА И МОДЕЛИ...</button>
             </div>
 
             <div id="game-over-screen" class="screen-overlay">
@@ -329,7 +293,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
             const startBtn = document.getElementById('start-btn');
-            startBtn.innerText = "ЗАГРУЗКА ИИ-МОДЕЛИ...";
+            startBtn.innerText = "ЗАГРУЗКА ЯДРА И МОДЕЛИ...";
             worker.postMessage({ type: 'INIT' });
         });
 
@@ -383,6 +347,7 @@
         Module.updateMonsterUI = function(id, challengeText, pctX, pctY) {
             let container = document.getElementById('monsters-container');
             let plate = document.getElementById('monster-' + id);
+            let wrapper = document.getElementById('canvas-wrapper');
 
             if (!plate) {
                 plate = document.createElement('div');
@@ -390,18 +355,15 @@
                 plate.className = 'monster-plate';
                 plate.innerHTML = `
                     <div class="challenge-text">${challengeText}</div>
-                    <div class="challenge-hint">Ответ</div>
+                    <div class="sub-info" style="color: #aaa; font-size: 10px; text-align:center; text-transform: uppercase; font-weight: bold; margin-top: 2px;">Ответ</div>
                 `;
                 container.appendChild(plate);
             }
 
-            const uiBounds = document.getElementById('game-ui').getBoundingClientRect();
-            
-            const currentWidth = uiBounds.width;
-            const currentHeight = uiBounds.height;
+            let rect = wrapper.getBoundingClientRect();
 
-            plate.style.left = (pctX * currentWidth) + 'px';
-            plate.style.top = (pctY * currentHeight) + 'px';
+            plate.style.left = (pctX * rect.width) + 'px';
+            plate.style.top = (pctY * rect.height) + 'px';
         };
 
         Module.removeMonsterUI = function(id) {
