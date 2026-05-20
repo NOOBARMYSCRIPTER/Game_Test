@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Math Duel: Magic Caster</title>
     <style>
+        :root {
+            --ui-scale: 1;
+            --font-modifier: 1;
+        }
+
         body {
             margin: 0;
             padding: 0;
@@ -23,18 +28,11 @@
 
         #canvas-wrapper {
             position: relative;
-            width: 100%;
-            max-width: 1280px;
-            aspect-ratio: 16 / 9;
+            width: 1280px;
+            height: 720px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            border-radius: 8px;
             background-color: #000;
-        }
-        
-        @media (max-aspect-ratio: 16/9) {
-            #canvas-wrapper {
-                width: 100vw;
-                height: calc(100vw * 9 / 16);
-            }
         }
 
         canvas.emscripten {
@@ -66,120 +64,126 @@
             align-items: center;
             z-index: 20;
             pointer-events: auto;
+            border-radius: 8px;
+            padding: 20px;
+            box-sizing: border-box;
         }
 
         #start-screen { background: rgba(10, 10, 15, 0.9); }
-        #game-over-screen { background: rgba(30, 5, 5, 0.93); display: none; }
+        #game-over-screen { background: rgba(30, 5, 5, 0.92); display: none; }
 
         .game-over-title {
-            font-size: 5vw;
-            max-size: 48px;
+            font-size: calc(44px * var(--font-modifier));
             font-weight: bold;
             color: #ff4444;
-            margin-bottom: 20px;
-            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            margin-bottom: 25px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.7);
             text-align: center;
         }
 
         .btn-ui {
-            padding: 14px 35px;
-            font-size: 4vw;
-            max-font-size: 26px;
+            padding: 18px 45px;
+            font-size: calc(24px * var(--font-modifier));
             font-weight: bold;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            transition: 0.2s;
+            transition: transform 0.2s, background-color 0.2s;
+            max-width: 90%;
+            text-align: center;
         }
-        
-        @media (min-width: 769px) {
-            .game-over-title { font-size: 48px; }
-            .btn-ui { font-size: 26px; padding: 18px 45px; }
-        }
-        
-        .btn-start { background: #2463eb; box-shadow: 0 5px 15px rgba(36, 99, 235, 0.4); }
-        .btn-start:hover { background: #1d4ed8; transform: scale(1.05); }
-        .btn-restart { background: #dc2626; box-shadow: 0 5px 15px rgba(220, 38, 38, 0.4); }
-        .btn-restart:hover { background: #b91c1c; transform: scale(1.05); }
+        .btn-start { background: #2463eb; box-shadow: 0 5px 20px rgba(36, 99, 235, 0.5); }
+        .btn-start:hover { background: #1d4ed8; transform: scale(1.03); }
+        .btn-restart { background: #dc2626; box-shadow: 0 5px 20px rgba(220, 38, 38, 0.5); }
+        .btn-restart:hover { background: #b91c1c; transform: scale(1.03); }
 
         .monster-plate {
             position: absolute;
             background: rgba(15, 15, 22, 0.95);
             border: 2px solid #ff4444;
-            padding: 8px 14px;
-            border-radius: 8px;
-            transform: translate(-50%, -100%);
+            padding: calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale));
+            border-radius: 10px;
+            transform: translate(-50%, -130%);
             pointer-events: auto;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 4px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.7);
-            transition: left 0.1s linear, top 0.1s linear;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.8);
+            backdrop-filter: blur(4px);
+            min-width: max-content;
         }
 
         .challenge-text { 
-            font-size: 20px; 
-            font-weight: 900; 
-            color: #ff5555; 
-            text-shadow: 0 0 10px rgba(255,68,68,0.3);
+            font-size: calc(22px * var(--font-modifier)); 
+            font-weight: 800; 
+            color: #ff6b6b; 
             letter-spacing: 1px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
 
-        @media (max-width: 768px) {
-            .monster-plate {
-                background: #1a1a24;
-                border: 3px solid #ff3b30;
-                padding: 12px 20px;
-                border-radius: 12px;
-                box-shadow: 0 0 15px rgba(255, 59, 48, 0.4), inset 0 0 8px rgba(0,0,0,0.8);
-            }
-            .challenge-text { 
-                font-size: 28px;
-                color: #ff3b30;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-            }
-            #gesture-debug {
-                padding: 8px 12px !important;
-                font-size: 14px !important;
-            }
-            #gesture-value { font-size: 18px !important; }
+        .challenge-hint {
+            color: #4ade80; 
+            font-size: calc(13px * var(--font-modifier)); 
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         #gesture-debug {
             position: absolute;
             top: 15px;
-            right: 15px;
-            background: rgba(20, 20, 30, 0.85);
-            padding: 12px 20px;
-            border-radius: 8px;
-            border: 1px solid #444;
-            font-size: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 30, 0.9);
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-size: calc(16px * var(--font-modifier));
             font-weight: bold;
             z-index: 30;
             display: flex;
             align-items: center;
-            gap: 10px;
-            pointer-events: none;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
-        #gesture-value { color: #4ade80; font-size: 24px; }
+        #gesture-value { color: #4ade80; font-size: calc(22px * var(--font-modifier)); }
 
         #webcam { display: none; }
+
+        @media (max-width: 768px) {
+            :root {
+                --ui-scale: 1.3;
+                --font-modifier: 1.2;
+            }
+            #canvas-wrapper {
+                width: 100vw !important;
+                height: 100vh !important;
+                border-radius: 0;
+            }
+            .screen-overlay {
+                border-radius: 0;
+            }
+            #gesture-debug {
+                top: auto;
+                bottom: 20px;
+            }
+        }
     </style>
 </head>
 <body>
 
     <video id="webcam" autoplay playsinline muted width="320" height="240"></video>
 
-    <div id="canvas-wrapper" id="wrapper">
+    <div id="canvas-wrapper">
         <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
         <div id="game-ui">
-            <div id="gesture-debug">Камера: <span id="gesture-value">0</span></div>
+            <div id="gesture-debug">Камера видит: <span id="gesture-value">0</span></div>
 
             <div id="start-screen" class="screen-overlay">
-                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ЯДРА И МОДЕЛИ...</button>
+                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ИИ-МОДЕЛИ...</button>
             </div>
 
             <div id="game-over-screen" class="screen-overlay">
@@ -195,6 +199,8 @@
         var Module = {
             canvas: (function() { return document.getElementById('canvas'); })()
         };
+
+        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
         let lastSentFingers = -1;
         let cameraReady = false;
@@ -293,7 +299,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
             const startBtn = document.getElementById('start-btn');
-            startBtn.innerText = "ЗАГРУЗКА ЯДРА И МОДЕЛИ...";
+            startBtn.innerText = "ЗАГРУЗКА ИИ-МОДЕЛИ...";
             worker.postMessage({ type: 'INIT' });
         });
 
@@ -347,7 +353,6 @@
         Module.updateMonsterUI = function(id, challengeText, pctX, pctY) {
             let container = document.getElementById('monsters-container');
             let plate = document.getElementById('monster-' + id);
-            let wrapper = document.getElementById('canvas-wrapper');
 
             if (!plate) {
                 plate = document.createElement('div');
@@ -355,15 +360,17 @@
                 plate.className = 'monster-plate';
                 plate.innerHTML = `
                     <div class="challenge-text">${challengeText}</div>
-                    <div class="sub-info" style="color: #aaa; font-size: 10px; text-align:center; text-transform: uppercase; font-weight: bold; margin-top: 2px;">Ответ</div>
+                    <div class="challenge-hint">Ответ?</div>
                 `;
                 container.appendChild(plate);
             }
 
-            let rect = wrapper.getBoundingClientRect();
+            const wrapper = document.getElementById('canvas-wrapper');
+            const currentWidth = wrapper.clientWidth;
+            const currentHeight = wrapper.clientHeight;
 
-            plate.style.left = (pctX * rect.width) + 'px';
-            plate.style.top = (pctY * rect.height) + 'px';
+            plate.style.left = (pctX * currentWidth) + 'px';
+            plate.style.top = (pctY * currentHeight) + 'px';
         };
 
         Module.removeMonsterUI = function(id) {
