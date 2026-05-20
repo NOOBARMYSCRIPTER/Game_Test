@@ -228,8 +228,8 @@
         `;
 
         const blob = new Blob([workerCode], { type: 'application/javascript' });
-        const workerUrl = URL.createObjectURL(blob, { type: 'module' });
-        const worker = new Worker(workerUrl); 
+        const workerUrl = URL.createObjectURL(blob);
+        const worker = new Worker(workerUrl, { type: 'module' });
 
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
