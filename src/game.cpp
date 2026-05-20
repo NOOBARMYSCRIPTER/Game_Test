@@ -44,6 +44,17 @@ void UpdateGame(float deltaTime) {
     for (auto& enemy : g_enemies) {
         Vector2 dir = { g_playerPos.x - enemy.position.x, g_playerPos.y - enemy.position.y };
         float length = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        if (length < 40.0f) {
+            g_sessionStarted = false;
+#ifdef __EMSCRIPTEN__
+            MAIN_THREAD_EM_ASM({
+                if (window.Module && window.Module.showGameOver) {
+                    window.Module.showGameOver();
+                }
+            });
+#endif
+            break; 
+        }
         
         if (length > 10.0f) { 
             enemy.position.x += (dir.x / length) * 100.0f * deltaTime;
@@ -89,6 +100,7 @@ void GameLoop() {
 extern "C" {
     void EMSCRIPTEN_KEEPALIVE StartGameSession() {
         g_enemies.clear();
+        g_nextEntityId = 3;
         SpawnEnemy(100.0f, 360.0f);
         SpawnEnemy(1180.0f, 360.0f);
         g_sessionStarted = true;
