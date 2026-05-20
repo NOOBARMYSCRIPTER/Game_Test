@@ -238,7 +238,7 @@
                 
                 startBtn.innerText = "СКАЧИВАНИЕ МОДЕЛИ (15MB)...";
                 
-                handLandmarker = await mpTasksVision.HandLandmarker.createFromOptions(vision, {
+                handLandmarker = await HandLandmarker.createFromOptions(vision, {
                   baseOptions: {
                     modelAssetPath: "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/hand_landmarker.task",
                     delegate: "GPU"
