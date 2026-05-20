@@ -160,14 +160,12 @@
         offscreenCanvas.height = 240;
 
         const workerCode = `
+            importScripts("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.js");
+
             let handLandmarker;
 
             async function init() {
                 try {
-                    const mp = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs");
-                    const FilesetResolver = mp.FilesetResolver;
-                    const HandLandmarker = mp.HandLandmarker;
-
                     const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm");
                     
                     handLandmarker = await HandLandmarker.createFromOptions(vision, {
@@ -198,7 +196,7 @@
                         if (results.landmarks && results.landmarks.length > 0) {
                             for (let h = 0; h < results.landmarks.length; h++) {
                                 const landmarks = results.landmarks[h];
-
+                                
                                 const fingerTips = [8, 12, 16, 20];
                                 fingerTips.forEach(tip => {
                                     if (landmarks[tip].y < landmarks[tip - 2].y) {
@@ -218,7 +216,7 @@
                                 }
                             }
                         }
-
+                        
                         if (totalFingers > 10) totalFingers = 10;
 
                         self.postMessage({ type: 'RESULT', fingersCount: totalFingers });
