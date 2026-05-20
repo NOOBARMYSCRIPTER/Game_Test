@@ -23,10 +23,6 @@ jobs:
       run: |
         emcc -v
 
-    - name: Install Terser
-      run: |
-        npm install -g terser
-
     - name: Configure CMake with Emscripten
       run: |
         mkdir build
@@ -44,8 +40,6 @@ jobs:
         cp build/game.html dist/index.html
         cp build/game.js dist/game.js
         cp build/game.wasm dist/game.wasm
-        
-        terser src/hand_worker.js -c -m -o dist/hand_worker.js
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
