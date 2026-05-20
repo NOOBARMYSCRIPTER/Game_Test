@@ -231,7 +231,7 @@
 
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         const workerUrl = URL.createObjectURL(blob);
-        const worker = new Worker(workerUrl, { type: 'module' });
+        const worker = new Worker(workerUrl); 
 
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
