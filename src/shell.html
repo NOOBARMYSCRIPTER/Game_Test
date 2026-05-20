@@ -166,6 +166,11 @@
         
             async function init() {
                 try {
+                    self.importScripts = async function(...urls) {
+                        for (const url of urls) {
+                            await import(url);
+                        }
+                    };
                     const vision = await FilesetResolver.forVisionTasks(
                         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
                     );
