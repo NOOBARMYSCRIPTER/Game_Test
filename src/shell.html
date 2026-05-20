@@ -132,7 +132,7 @@
             <div id="gesture-debug">Пальцев на камере: <span id="gesture-value">0</span></div>
 
             <div id="start-screen" class="screen-overlay">
-                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА КАМЕРЫ...</button>
+                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ПОДКЛЮЧЕНИЕ...</button>
             </div>
 
             <div id="game-over-screen" class="screen-overlay">
@@ -152,8 +152,10 @@
         let lastSentFingers = -1;
         let worker = null;
         let workerReady = false;
+        let cameraReady = false;
 
         window.addEventListener('DOMContentLoaded', () => {
+            StartCameraImmediate();
             InitMediaPipeWorker();
         });
 
@@ -202,18 +204,35 @@
             if (plate) plate.remove();
         };
 
-        function InitMediaPipeWorker() {
+        function StartCameraImmediate() {
             const videoElement = document.getElementById('webcam');
             const startBtn = document.getElementById('start-btn');
 
+            navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
+                .then(function(stream) {
+                    videoElement.srcObject = stream;
+                    videoElement.addEventListener('loadedmetadata', () => {
+                        cameraReady = true;
+                        checkReadyState();
+                    });
+                })
+                .catch(err => {
+                    console.error("Камера недоступна:", err);
+                    startBtn.innerText = 'ДОСТУП К КАМЕРЕ ЗАБЛОКИРОВАН';
+                });
+        }
+
+        function InitMediaPipeWorker() {
+            const startBtn = document.getElementById('start-btn');
             worker = new Worker('hand_worker.js', { type: 'module' });
 
             worker.onmessage = function(e) {
-                if (e.data.type === 'TRACKER_READY') {
+                if (e.data.type === 'STATUS') {
+                    startBtn.innerText = e.data.msg;
+                }
+                else if (e.data.type === 'TRACKER_READY') {
                     workerReady = true;
-                    startBtn.removeAttribute('disabled');
-                    startBtn.style.opacity = '1';
-                    startBtn.innerText = 'НАЧАТЬ ИГРУ';
+                    checkReadyState();
                 } 
                 else if (e.data.type === 'RESULTS') {
                     const fingersCount = e.data.count;
@@ -228,31 +247,29 @@
                         lastSentFingers = 0;
                     }
                     
-                    setTimeout(sendNextFrame, 60); 
+                    setTimeout(sendNextFrame, 50); 
                 }
             };
+        }
 
-            navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
-                .then(function(stream) {
-                    videoElement.srcObject = stream;
-                    videoElement.addEventListener('loadedmetadata', () => {
-                        sendNextFrame();
-                    });
-                })
-                .catch(err => {
-                    console.error("Камера недоступна:", err);
-                    startBtn.innerText = 'ОШИБКА КАМЕРЫ';
-                });
+        function checkReadyState() {
+            const startBtn = document.getElementById('start-btn');
+            if (workerReady && cameraReady) {
+                startBtn.removeAttribute('disabled');
+                startBtn.style.opacity = '1';
+                startBtn.innerText = 'НАЧАТЬ ИГРУ';
+                sendNextFrame();
+            }
         }
 
         function sendNextFrame() {
             const videoElement = document.getElementById('webcam');
-
-            if (workerReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+            
+            if (workerReady && cameraReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
                 createImageBitmap(videoElement).then(imageBitmap => {
                     worker.postMessage({ type: 'PROCESS_FRAME', img: imageBitmap }, [imageBitmap]);
                 }).catch(() => {
-                    setTimeout(sendNextFrame, 60);
+                    setTimeout(sendNextFrame, 50);
                 });
             } else {
                 setTimeout(sendNextFrame, 100);
