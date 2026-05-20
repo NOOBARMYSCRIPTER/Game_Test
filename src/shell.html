@@ -206,15 +206,11 @@
                                     }
                                 });
 
-                                if (results.handedness && results.handedness[h]) {
-                                    const handInfo = results.handedness[h][0] || results.handedness[h];
-                                    const isLeftHand = handInfo.categoryName === 'Left';
-                                    
-                                    if (isLeftHand) {
-                                        if (landmarks[4].x > landmarks[2].x + 0.02) totalFingers++;
-                                    } else {
-                                        if (landmarks[4].x < landmarks[2].x - 0.02) totalFingers++;
-                                    }
+                                const distTipToPinky = Math.abs(landmarks[4].x - landmarks[17].x);
+                                const distJointToPinky = Math.abs(landmarks[3].x - landmarks[17].x);
+                                
+                                if (distTipToPinky > distJointToPinky + 0.02) {
+                                    totalFingers++;
                                 }
                             }
                         }
