@@ -29,10 +29,3 @@ set_target_properties(game PROPERTIES
     SUFFIX ".html"
     LINK_FLAGS "-sUSE_GLFW=3 -sASYNCIFY -sEXPORTED_FUNCTIONS=['_main','_StartGameSession','_RegisterGestureResult'] -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString'] --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/src/shell.html"
 )
-
-add_custom_command(
-    TARGET game
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/src/hand_worker.js" "${CMAKE_CURRENT_BINARY_DIR}/hand_worker.js"
-    COMMENT "Копирование hand_worker.js в директорию сборки..."
-)
