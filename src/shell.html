@@ -121,7 +121,12 @@
         #webcam { display: none; }
     </style>
 
-    <script src="https://jsdelivr.net/@mediapipe/tasks-vision@0.10.8/vision_bundle.js" crossorigin="anonymous"></script>
+    <script type="module">
+      import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
+
+      window.HandLandmarker = HandLandmarker;
+      window.FilesetResolver = FilesetResolver;
+    </script>
 </head>
 <body>
 
