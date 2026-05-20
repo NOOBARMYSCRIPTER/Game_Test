@@ -160,29 +160,54 @@
         offscreenCanvas.height = 240;
 
         const workerCode = `
-            import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+            importScripts("https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js");
         
-            let handLandmarker;
+            let hands;
         
-            async function init() {
+            function init() {
                 try {
-                    self.importScripts = async function(...urls) {
-                        for (const url of urls) {
-                            await import(url);
+                    hands = new self.Hands({
+                        locateFile: (file) => {
+                            return "https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/" + file;
                         }
-                    };
-                    const vision = await FilesetResolver.forVisionTasks(
-                        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-                    );
-                    
-                    handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                        baseOptions: {
-                            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-                            delegate: "CPU" 
-                        },
-                        runningMode: "IMAGE",
-                        numHands: 2
                     });
+        
+                    hands.setOptions({
+                        maxNumHands: 2,
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5
+                    });
+        
+                    hands.onResults((results) => {
+                        let totalFingers = 0;
+        
+                        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                            for (let h = 0; h < results.multiHandLandmarks.length; h++) {
+                                const landmarks = results.multiHandLandmarks[h];
+                                
+                                const fingerTips =;
+                                fingerTips.forEach(tip => {
+                                    if (landmarks[tip].y < landmarks[tip - 2].y) {
+                                        totalFingers++;
+                                    }
+                                });
+        
+                                if (results.multiHandedness && results.multiHandedness[h]) {
+                                    const isLeftHand = results.multiHandedness[h].label === 'Left';
+                                    if (isLeftHand) {
+                                        if (landmarks.x > landmarks.x + 0.02) totalFingers++;
+                                    } else {
+                                        if (landmarks.x < landmarks.x - 0.02) totalFingers++;
+                                    }
+                                }
+                            }
+                        }
+        
+                        if (totalFingers > 10) totalFingers = 10;
+                        self.postMessage({ type: 'RESULT', fingersCount: totalFingers });
+                    });
+        
                     self.postMessage({ type: 'READY' });
                 } catch(e) {
                     self.postMessage({ type: 'ERROR', error: e.toString() });
@@ -191,43 +216,11 @@
         
             self.onmessage = async (e) => {
                 if (e.data.type === 'INIT') {
-                    await init();
+                    init();
                 }
-                if (e.data.type === 'PROCESS_FRAME' && handLandmarker) {
+                if (e.data.type === 'PROCESS_FRAME' && hands) {
                     try {
-                        const { imageData } = e.data;
-                        
-                        const results = handLandmarker.detect(imageData);
-                        
-                        let totalFingers = 0;
-        
-                        if (results.landmarks && results.landmarks.length > 0) {
-                            for (let h = 0; h < results.landmarks.length; h++) {
-                                const landmarks = results.landmarks[h];
-                                
-                                const fingerTips = [8, 12, 16, 20];
-                                fingerTips.forEach(tip => {
-                                    if (landmarks[tip].y < landmarks[tip - 2].y) {
-                                        totalFingers++;
-                                    }
-                                });
-        
-                                if (results.handedness && results.handedness[h]) {
-                                    const handInfo = results.handedness[h][0] || results.handedness[h];
-                                    const isLeftHand = handInfo.categoryName === 'Left';
-                                    
-                                    if (isLeftHand) {
-                                        if (landmarks[4].x > landmarks[2].x + 0.02) totalFingers++;
-                                    } else {
-                                        if (landmarks[4].x < landmarks[2].x - 0.02) totalFingers++;
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if (totalFingers > 10) totalFingers = 10;
-        
-                        self.postMessage({ type: 'RESULT', fingersCount: totalFingers });
+                        await hands.send({ image: e.data.imageData });
                     } catch(err) {
                         self.postMessage({ type: 'RESULT', fingersCount: 0, error: err.toString() });
                     }
@@ -237,7 +230,7 @@
 
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         const workerUrl = URL.createObjectURL(blob);
-        const worker = new Worker(workerUrl, { type: 'module' }); 
+        const worker = new Worker(workerUrl); 
 
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
