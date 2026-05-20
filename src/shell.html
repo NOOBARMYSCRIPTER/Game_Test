@@ -120,13 +120,6 @@
 
         #webcam { display: none; }
     </style>
-
-    <script type="module">
-      import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
-
-      window.HandLandmarker = HandLandmarker;
-      window.FilesetResolver = FilesetResolver;
-    </script>
 </head>
 <body>
 
@@ -157,14 +150,104 @@
         };
 
         let lastSentFingers = -1;
-        let handLandmarker = null;
         let cameraReady = false;
         let aiReady = false;
 
+        const offscreenCanvas = document.createElement('canvas');
+        const offscreenCtx = offscreenCanvas.getContext('2d');
+        offscreenCanvas.width = 320;
+        offscreenCanvas.height = 240;
+
+        const workerCode = `
+            import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
+            
+            let handLandmarker;
+
+            async function init() {
+                try {
+                    const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm");
+                    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                        baseOptions: {
+                            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+                            delegate: "GPU"
+                        },
+                        runningMode: "IMAGE",
+                        numHands: 1
+                    });
+                    self.postMessage({ type: 'READY' });
+                } catch(e) {
+                    self.postMessage({ type: 'ERROR', error: e.toString() });
+                }
+            }
+
+            self.onmessage = async (e) => {
+                if (e.data.type === 'INIT') {
+                    await init();
+                }
+                if (e.data.type === 'PROCESS_FRAME' && handLandmarker) {
+                    try {
+                        const { imageData } = e.data;
+                        const results = handLandmarker.detect(imageData);
+                        
+                        let fingersCount = 0;
+                        if (results.landmarks && results.landmarks.length > 0) {
+                            const landmarks = results.landmarks[0];
+                            const fingerTips = [8, 12, 16, 20];
+                            
+                            fingerTips.forEach(tip => {
+                                if (landmarks[tip].y < landmarks[tip - 3].y) fingersCount++;
+                            });
+
+                            if (results.handedness && results.handedness.length > 0) {
+                                const isLeftHand = results.handedness[0][0].categoryName === 'Left';
+                                if (isLeftHand) {
+                                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
+                                } else {
+                                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
+                                }
+                            }
+                        }
+                        self.postMessage({ type: 'RESULT', fingersCount });
+                    } catch(err) {}
+                }
+            };
+        `;
+
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        const worker = new Worker(workerUrl, { type: 'module' });
+
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
-            InitMediaPipeMainThread();
+
+            const startBtn = document.getElementById('start-btn');
+            startBtn.innerText = "ЗАГРУЗКА ЯДРА И МОДЕЛИ...";
+            worker.postMessage({ type: 'INIT' });
         });
+
+        worker.onmessage = (e) => {
+            if (e.data.type === 'READY') {
+                aiReady = true;
+                checkReadyState();
+            }
+            if (e.data.type === 'ERROR') {
+                console.error("Ошибка внутри ИИ-потока:", e.data.error);
+                document.getElementById('start-btn').innerText = "ОШИБКА ЗАГРУЗКИ СЕТИ";
+            }
+            if (e.data.type === 'RESULT') {
+                let fingersCount = e.data.fingersCount;
+                document.getElementById('gesture-value').innerText = fingersCount;
+
+                if (fingersCount !== lastSentFingers && fingersCount > 0) {
+                    lastSentFingers = fingersCount;
+                    if (typeof Module.ccall === 'function') {
+                        Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
+                    }
+                } else if (fingersCount === 0) {
+                    lastSentFingers = 0;
+                }
+            }
+        };
 
         function ClickStartGame() {
             document.getElementById('start-screen').style.display = 'none';
@@ -228,48 +311,6 @@
                     startBtn.innerText = 'ДОСТУП К КАМЕРЕ ЗАБЛОКИРОВАН';
                 });
         }
-        
-        async function InitMediaPipeMainThread() {
-              const startBtn = document.getElementById('start-btn');
-              
-              let gameModuleBackup = undefined;
-              
-              try {
-                startBtn.innerText = "ЗАГРУЗКА ЯДРА...";
-                
-                gameModuleBackup = window.Module;
-                window.Module = undefined; 
-                
-                const vision = await FilesetResolver.forVisionTasks("https://jsdelivr.net");
-                
-                startBtn.innerText = "СКАЧИВАНИЕ МОДЕЛИ (15MB)...";
-                
-                const stableModelUrl = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
-                
-                handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                  baseOptions: {
-                    modelAssetPath: stableModelUrl,
-                    delegate: "GPU"
-                  },
-                  runningMode: "VIDEO",
-                  numHands: 1
-                });
-                
-                if (gameModuleBackup) {
-                    window.Module = gameModuleBackup;
-                }
-                
-                aiReady = true;
-                checkReadyState();
-              } catch (err) {
-                console.error("Ошибка MediaPipe: ", err);
-                startBtn.innerText = "ОШИБКА ЗАГРУЗКИ СЕТИ";
-                
-                if (gameModuleBackup) {
-                    window.Module = gameModuleBackup;
-                }
-              }
-        }
 
         function checkReadyState() {
             const startBtn = document.getElementById('start-btn');
@@ -285,45 +326,14 @@
         function processVideoFrame() {
             const videoElement = document.getElementById('webcam');
 
-            if (handLandmarker && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-                try {
-                    const timestamp = performance.now();
-                    const results = handLandmarker.detectForVideo(videoElement, timestamp);
-                    
-                    let fingersCount = 0;
+            if (aiReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                offscreenCtx.drawImage(videoElement, 0, 0, 320, 240);
+                const imageData = offscreenCtx.getImageData(0, 0, 320, 240);
 
-                    if (results.landmarks && results.landmarks.length > 0) {
-                        const landmarks = results.landmarks[0];
-                        const fingerTips = [8, 12, 16, 20];
-                        
-                        fingerTips.forEach(tip => {
-                            if (landmarks[tip].y < landmarks[tip - 3].y) fingersCount++;
-                        });
-
-                        if (results.handedness && results.handedness.length > 0) {
-                            const isLeftHand = results.handedness[0][0].categoryName === 'Left';
-                            if (isLeftHand) {
-                                if (landmarks[4].x > landmarks[3].x) fingersCount++;
-                            } else {
-                                if (landmarks[4].x < landmarks[3].x) fingersCount++;
-                            }
-                        }
-                    }
-
-                    document.getElementById('gesture-value').innerText = fingersCount;
-
-                    if (fingersCount !== lastSentFingers && fingersCount > 0) {
-                        lastSentFingers = fingersCount;
-                        if (typeof Module.ccall === 'function') {
-                            Module.ccall('RegisterGestureResult', null, ['int'], [fingersCount]);
-                        }
-                    } else if (fingersCount === 0) {
-                        lastSentFingers = 0;
-                    }
-
-                } catch (err) {
-                    console.error("Ошибка обработки кадра:", err);
-                }
+                worker.postMessage({
+                    type: 'PROCESS_FRAME',
+                    imageData: imageData
+                });
             }
 
             requestAnimationFrame(processVideoFrame);
