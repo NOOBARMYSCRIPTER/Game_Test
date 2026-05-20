@@ -132,7 +132,7 @@
             <div id="gesture-debug">Пальцев на камере: <span id="gesture-value">0</span></div>
 
             <div id="start-screen" class="screen-overlay">
-                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ИИ...</button>
+                <button class="btn-ui btn-start" id="start-btn" onclick="ClickStartGame()" disabled style="opacity: 0.5;">ЗАГРУЗКА ЯДРА И МОДЕЛИ...</button>
             </div>
 
             <div id="game-over-screen" class="screen-overlay">
@@ -152,6 +152,7 @@
         let lastSentFingers = -1;
         let cameraReady = false;
         let aiReady = false;
+        let isProcessing = false;
 
         const offscreenCanvas = document.createElement('canvas');
         const offscreenCtx = offscreenCanvas.getContext('2d');
@@ -195,35 +196,39 @@
                         let fingersCount = 0;
                         if (results.landmarks && results.landmarks.length > 0) {
                             const landmarks = results.landmarks[0];
+
                             const fingerTips = [8, 12, 16, 20];
-                            
                             fingerTips.forEach(tip => {
-                                if (landmarks[tip].y < landmarks[tip - 3].y) fingersCount++;
+                                if (landmarks[tip].y < landmarks[tip - 2].y) {
+                                    fingersCount++;
+                                }
                             });
 
                             if (results.handedness && results.handedness.length > 0) {
-                                const isLeftHand = results.handedness[0][0].categoryName === 'Left';
+                                const handInfo = results.handedness[0][0] || results.handedness[0];
+                                const isLeftHand = handInfo.categoryName === 'Left';
+                                
                                 if (isLeftHand) {
-                                    if (landmarks[4].x > landmarks[3].x) fingersCount++;
+                                    if (landmarks[4].x > landmarks[2].x + 0.02) fingersCount++;
                                 } else {
-                                    if (landmarks[4].x < landmarks[3].x) fingersCount++;
+                                    if (landmarks[4].x < landmarks[2].x - 0.02) fingersCount++;
                                 }
                             }
                         }
                         self.postMessage({ type: 'RESULT', fingersCount });
-                    } catch(err) {}
+                    } catch(err) {
+                        self.postMessage({ type: 'RESULT', fingersCount: 0 });
+                    }
                 }
             };
         `;
 
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         const workerUrl = URL.createObjectURL(blob);
-        
         const worker = new Worker(workerUrl); 
 
         window.addEventListener('DOMContentLoaded', () => {
             StartCameraImmediate();
-            
             const startBtn = document.getElementById('start-btn');
             startBtn.innerText = "ЗАГРУЗКА ЯДРА И МОДЕЛИ...";
             worker.postMessage({ type: 'INIT' });
@@ -250,6 +255,8 @@
                 } else if (fingersCount === 0) {
                     lastSentFingers = 0;
                 }
+                
+                isProcessing = false; 
             }
         };
 
@@ -323,24 +330,24 @@
                 startBtn.style.opacity = '1';
                 startBtn.innerText = 'НАЧАТЬ ИГРУ';
 
-                requestAnimationFrame(processVideoFrame);
+                setInterval(processVideoFrame, 40);
             }
         }
 
         function processVideoFrame() {
             const videoElement = document.getElementById('webcam');
 
-            if (aiReady && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+            if (aiReady && !isProcessing && videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                isProcessing = true; 
+                
                 offscreenCtx.drawImage(videoElement, 0, 0, 320, 240);
                 const imageData = offscreenCtx.getImageData(0, 0, 320, 240);
 
                 worker.postMessage({
                     type: 'PROCESS_FRAME',
                     imageData: imageData
-                });
+                }, [imageData.data.buffer]);
             }
-
-            requestAnimationFrame(processVideoFrame);
         }
     </script>
     
