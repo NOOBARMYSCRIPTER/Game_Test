@@ -186,7 +186,7 @@
                             for (let h = 0; h < results.multiHandLandmarks.length; h++) {
                                 const landmarks = results.multiHandLandmarks[h];
                                 
-                                const fingerTips =;
+                                const fingerTips = [8, 12, 16, 20];
                                 fingerTips.forEach(tip => {
                                     if (landmarks[tip].y < landmarks[tip - 2].y) {
                                         totalFingers++;
