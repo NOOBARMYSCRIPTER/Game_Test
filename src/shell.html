@@ -234,6 +234,11 @@
               try {
                 startBtn.innerText = "ЗАГРУЗКА ЯДРА...";
                 
+                const savedCanvas = Module.canvas;
+                const savedShowGameOver = Module.showGameOver;
+                const savedUpdateMonsterUI = Module.updateMonsterUI;
+                const savedRemoveMonsterUI = Module.removeMonsterUI;
+                
                 const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm");
                 
                 startBtn.innerText = "СКАЧИВАНИЕ МОДЕЛИ (15MB)...";
@@ -246,6 +251,11 @@
                   runningMode: "VIDEO",
                   numHands: 1
                 });
+                
+                Module.canvas = savedCanvas;
+                Module.showGameOver = savedShowGameOver;
+                Module.updateMonsterUI = savedUpdateMonsterUI;
+                Module.removeMonsterUI = savedRemoveMonsterUI;
                 
                 aiReady = true;
                 checkReadyState();
