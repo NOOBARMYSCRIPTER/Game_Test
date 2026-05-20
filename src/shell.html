@@ -158,6 +158,9 @@
             minTrackingConfidence: 0.5
         });
 
+        let offscreenCtx = null;
+        let offscreenCanvas = null;
+
         hands.onResults((results) => {
             let fingersCount = 0;
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -180,9 +183,20 @@
 
         self.onmessage = async (e) => {
             if (e.data.type === 'PROCESS_FRAME') {
+                const img = e.data.img;
+
+                if (!offscreenCanvas) {
+                    offscreenCanvas = new OffscreenCanvas(img.width, img.height);
+                    offscreenCtx = offscreenCanvas.getContext('2d');
+                }
+
+                offscreenCtx.drawImage(img, 0, 0);
+                img.close();
+
                 try {
-                    await hands.send({ image: e.data.img });
+                    await hands.send({ image: offscreenCanvas });
                 } catch (err) {}
+
                 self.postMessage({ type: 'READY' });
             }
         };
