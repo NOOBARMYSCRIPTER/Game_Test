@@ -51,6 +51,11 @@ void SpawnEnemy(float x, float y) {
 void UpdateGame(float deltaTime) {
     if (!g_sessionStarted) return;
 
+    float currentWidth = (float)GetScreenWidth();
+    float currentHeight = (float)GetScreenHeight();
+
+    g_playerPos = { currentWidth / 2.0f, currentHeight / 2.0f };
+
     for (auto& enemy : g_enemies) {
         Vector2 dir = { g_playerPos.x - enemy.position.x, g_playerPos.y - enemy.position.y };
         float length = std::sqrt(dir.x * dir.x + dir.y * dir.y);
@@ -72,8 +77,8 @@ void UpdateGame(float deltaTime) {
             enemy.position.y += (dir.y / length) * 60.0f * deltaTime;
         }
 
-        float pctX = enemy.position.x / 1280.0f;
-        float pctY = enemy.position.y / 720.0f;
+        float pctX = enemy.position.x / currentWidth;
+        float pctY = enemy.position.y / currentHeight;
 
 #ifdef __EMSCRIPTEN__
         MAIN_THREAD_EM_ASM({
@@ -92,7 +97,6 @@ void UpdateGame(float deltaTime) {
         });
 
         Vector2 target = (it != g_enemies.end()) ? it->position : proj.target_pos;
-
         Vector2 dir = { target.x - proj.position.x, target.y - proj.position.y };
         float length = std::sqrt(dir.x * dir.x + dir.y * dir.y);
 
@@ -111,8 +115,8 @@ void UpdateGame(float deltaTime) {
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_int_distribution<> sideDist(0, 1);
-                std::uniform_real_distribution<float> yDist(100.0f, 620.0f);
-                float spawnX = sideDist(gen) == 0 ? 50.0f : 1230.0f;
+                std::uniform_real_distribution<float> yDist(100.0f, currentHeight - 100.0f);
+                float spawnX = sideDist(gen) == 0 ? 50.0f : (currentWidth - 50.0f);
                 SpawnEnemy(spawnX, yDist(gen));
             }
         } else {
@@ -159,6 +163,19 @@ extern "C" {
         g_enemies.clear();
         g_projectiles.clear();
         g_nextEntityId = 3;
+        
+        float w = (float)GetScreenWidth();
+        float h = (float)GetScreenHeight();
+
+        SpawnEnemy(100.0f, 200.0f);
+        SpawnEnemy(w - 100.0f, h - 200.0f);
+        g_sessionStarted = true;
+    }
+
+    void EMSCRIPTEN_KEEPALIVE StartGameSession() {
+        g_enemies.clear();
+        g_projectiles.clear();
+        g_nextEntityId = 3;
         SpawnEnemy(100.0f, 200.0f);
         SpawnEnemy(1180.0f, 500.0f);
         g_sessionStarted = true;
@@ -183,6 +200,7 @@ extern "C" {
 }
 
 int main() {
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1280, 720, "Math Duel: Raylib Edition");
     
 #ifdef __EMSCRIPTEN__
