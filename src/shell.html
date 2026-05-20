@@ -234,10 +234,8 @@
               try {
                 startBtn.innerText = "ЗАГРУЗКА ЯДРА...";
                 
-                const savedCanvas = Module.canvas;
-                const savedShowGameOver = Module.showGameOver;
-                const savedUpdateMonsterUI = Module.updateMonsterUI;
-                const savedRemoveMonsterUI = Module.removeMonsterUI;
+                const gameModuleBackup = window.Module;
+                window.Module = undefined; 
                 
                 const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm");
                 
@@ -252,16 +250,17 @@
                   numHands: 1
                 });
                 
-                Module.canvas = savedCanvas;
-                Module.showGameOver = savedShowGameOver;
-                Module.updateMonsterUI = savedUpdateMonsterUI;
-                Module.removeMonsterUI = savedRemoveMonsterUI;
+                window.Module = gameModuleBackup;
                 
                 aiReady = true;
                 checkReadyState();
               } catch (err) {
                 console.error("Ошибка MediaPipe: ", err);
                 startBtn.innerText = "ОШИБКА ЗАГРУЗКИ СЕТИ";
+                
+                if (!window.Module && gameModuleBackup) {
+                    window.Module = gameModuleBackup;
+                }
               }
         }
 
