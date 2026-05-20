@@ -234,9 +234,7 @@
               try {
                 startBtn.innerText = "ЗАГРУЗКА ЯДРА...";
                 
-                const vision = await mpTasksVision.FilesetResolver.forVisionTasks(
-                  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
-                );
+                const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm");
                 
                 startBtn.innerText = "СКАЧИВАНИЕ МОДЕЛИ (15MB)...";
                 
