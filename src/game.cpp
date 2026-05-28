@@ -1001,7 +1001,7 @@ static void DrawTouchUI() {
 
     auto drawButton = [&](Rectangle r, const char* text, Color c, bool held) {
         DrawRectangleRounded(r, 0.22f, 10, Fade(c, held ? 0.85f : 0.55f));
-        DrawRectangleRoundedLines(r, 0.22f, 10, 2.0f, Fade(WHITE, 0.18f));
+        DrawRectangleRoundedLines(r, 0.22f, 10, Fade(WHITE, 0.18f));
         int tw = MeasureText(text, 20);
         DrawText(text, (int)(r.x + r.width * 0.5f - tw * 0.5f), (int)(r.y + r.height * 0.5f - 10), 20, RAYWHITE);
     };
@@ -1064,7 +1064,7 @@ static void DrawGame() {
     for (const auto& b : g_bullets) {
         if (b.fromPlayer) {
             DrawCircleV(b.pos, b.radius, b.explosive ? ORANGE : YELLOW);
-            if (b.chain) DrawCircleLines((int)b.pos.x, (int)b.pos.y, 8.0f, Fade(CYAN, 0.7f));
+            if (b.chain) DrawCircleLines((int)b.pos.x, (int)b.pos.y, 8.0f, Fade(SKYBLUE, 0.7f));
         } else {
             DrawCircleV(b.pos, b.radius, RED);
         }
@@ -1109,7 +1109,7 @@ static void DrawGame() {
 
     DrawTouchUI();
 
-    float h = (float)GetScreenHeight();
+    float screenH = (float)GetScreenHeight();
     DrawText("Левый джойстик — движение", 24, (int)h - 28, 16, Fade(WHITE, 0.75f));
     DrawText("FIRE — авто-огонь, SHIELD — держи, DASH — рывок, SLOW — замедление", 24, (int)h - 48, 16, Fade(WHITE, 0.75f));
 
@@ -1122,7 +1122,7 @@ static void DrawGame() {
 
         Rectangle startRect = { w * 0.5f - 150.0f, h * 0.68f, 300.0f, 82.0f };
         DrawRectangleRounded(startRect, 0.18f, 10, Fade(BLUE, 0.9f));
-        DrawRectangleRoundedLines(startRect, 0.18f, 10, 2.0f, Fade(WHITE, 0.2f));
+        DrawRectangleRoundedLines(startRect, 0.18f, 10, Fade(WHITE, 0.2f));
         DrawText("НАЧАТЬ", (int)(startRect.x + startRect.width * 0.5f - MeasureText("НАЧАТЬ", 28) / 2), (int)(startRect.y + 22), 28, RAYWHITE);
         DrawText("Tap / Enter", (int)(w * 0.5f) - MeasureText("Tap / Enter", 18) / 2, (int)(h * 0.80f), 18, Fade(WHITE, 0.75f));
     }
@@ -1144,7 +1144,7 @@ static void DrawGame() {
             bool hover = CheckCollisionPointRec(GetMousePosition(), r);
 
             DrawRectangleRounded(r, 0.16f, 10, hover ? Fade(SKYBLUE, 0.24f) : Fade(WHITE, 0.08f));
-            DrawRectangleRoundedLines(r, 0.16f, 10, 2.0f, hover ? SKYBLUE : Fade(WHITE, 0.2f));
+            DrawRectangleRoundedLines(r, 0.16f, 10, hover ? SKYBLUE : Fade(WHITE, 0.2f));
 
             DrawText(TextFormat("%d", i + 1), x + 14, y + 10, 22, YELLOW);
             DrawText(UpgradeName(g_choices[i]), x + 18, y + 38, 24, RAYWHITE);
@@ -1162,7 +1162,7 @@ static void DrawGame() {
 
         Rectangle startRect = { w * 0.5f - 150.0f, h * 0.68f, 300.0f, 82.0f };
         DrawRectangleRounded(startRect, 0.18f, 10, Fade(RED, 0.9f));
-        DrawRectangleRoundedLines(startRect, 0.18f, 10, 2.0f, Fade(WHITE, 0.2f));
+        DrawRectangleRoundedLines(startRect, 0.18f, 10, Fade(WHITE, 0.2f));
         DrawText("ЗАНОВО", (int)(startRect.x + startRect.width * 0.5f - MeasureText("ЗАНОВО", 28) / 2), (int)(startRect.y + 22), 28, RAYWHITE);
     }
 
