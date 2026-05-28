@@ -17,6 +17,7 @@ static float Randf(float a, float b) {
     std::uniform_real_distribution<float> dist(a, b);
     return dist(g_rng);
 }
+
 static int Randi(int a, int b) {
     std::uniform_int_distribution<int> dist(a, b);
     return dist(g_rng);
@@ -28,12 +29,15 @@ static Vector2 Sub(Vector2 a, Vector2 b) { return V2(a.x - b.x, a.y - b.y); }
 static Vector2 Mul(Vector2 a, float s) { return V2(a.x * s, a.y * s); }
 
 static float Len(Vector2 v) { return std::sqrt(v.x * v.x + v.y * v.y); }
+
 static Vector2 Norm(Vector2 v) {
     float l = Len(v);
     if (l < 0.0001f) return V2(0, 0);
     return V2(v.x / l, v.y / l);
 }
+
 static float Dist(Vector2 a, Vector2 b) { return Len(Sub(a, b)); }
+
 static Vector2 ClampToScreen(Vector2 p, float margin = 16.0f) {
     float w = (float)GetScreenWidth();
     float h = (float)GetScreenHeight();
@@ -89,17 +93,17 @@ struct Player {
     float energy = 100.0f;
     float maxEnergy = 100.0f;
 
-    float fireTimer = 0.0f;
+    float fireCd = 0.0f;
     float fireRate = 0.18f;
     float bulletDamage = 18.0f;
 
     float dashCd = 0.0f;
-    float dashCooldown = 1.15f;
+    float dashCooldown = 1.10f;
     float dashTime = 0.0f;
     float dashSpeed = 980.0f;
     float invuln = 0.0f;
 
-    float skillCd = 0.0f;
+    float slowCd = 0.0f;
     float slowTimer = 0.0f;
 
     float shieldDrain = 24.0f;
@@ -154,11 +158,10 @@ struct Hazard {
 
 struct TouchInput {
     Vector2 move = { 0, 0 };
-    bool fireHeld = false;
-    bool shieldHeld = false;
-    bool dashPressed = false;
-    bool skillPressed = false;
     bool startPressed = false;
+    bool dashPressed = false;
+    bool shieldHeld = false;
+    bool slowPressed = false;
     int upgradePressed = -1;
 };
 
@@ -175,55 +178,53 @@ static float g_waveClearTimer = 0.0f;
 static float g_coreHp = 150.0f;
 static float g_coreMaxHp = 150.0f;
 static float g_screenShake = 0.0f;
-static bool g_hasChoices = false;
-static std::array<UpgradeType, 3> g_choices{};
 
-static TouchInput g_input;
+static std::array<UpgradeType, 3> g_choices{};
 
 static bool g_prevStart = false;
 static bool g_prevDash = false;
-static bool g_prevSkill = false;
+static bool g_prevSlow = false;
 static std::array<bool, 3> g_prevUpgrade{ false, false, false };
 
 static void ResetTouchLatches() {
     g_prevStart = false;
     g_prevDash = false;
-    g_prevSkill = false;
+    g_prevSlow = false;
     g_prevUpgrade = { false, false, false };
 }
 
 static const char* UpgradeName(UpgradeType t) {
     switch (t) {
-    case UpgradeType::MaxHp: return "Укрепление тела";
-    case UpgradeType::Damage: return "Сильный выстрел";
-    case UpgradeType::FireRate: return "Быстрая стрельба";
-    case UpgradeType::Dash: return "Сверхрывок";
-    case UpgradeType::Energy: return "Резерв энергии";
-    case UpgradeType::Shield: return "Эффективный щит";
-    case UpgradeType::Magnet: return "Магнит добычи";
-    case UpgradeType::Shotgun: return "Шотган-модуль";
-    case UpgradeType::Explosive: return "Взрывные снаряды";
-    case UpgradeType::Chain: return "Цепная молния";
-    case UpgradeType::TimeSlow: return "Разлом времени";
-    case UpgradeType::CoreRepair: return "Ремонт ядра";
+    case UpgradeType::MaxHp: return "MAX HP";
+    case UpgradeType::Damage: return "DAMAGE";
+    case UpgradeType::FireRate: return "FIRE RATE";
+    case UpgradeType::Dash: return "DASH";
+    case UpgradeType::Energy: return "ENERGY";
+    case UpgradeType::Shield: return "SHIELD";
+    case UpgradeType::Magnet: return "MAGNET";
+    case UpgradeType::Shotgun: return "SHOTGUN";
+    case UpgradeType::Explosive: return "EXPLOSIVE";
+    case UpgradeType::Chain: return "CHAIN";
+    case UpgradeType::TimeSlow: return "SLOW TIME";
+    case UpgradeType::CoreRepair: return "CORE REPAIR";
     }
     return "";
 }
 
 static const char* UpgradeDesc(UpgradeType t) {
     switch (t) {
-    case UpgradeType::MaxHp: return "+25 HP и полное лечение";
-    case UpgradeType::Damage: return "+6 урона к выстрелам";
-    case UpgradeType::FireRate: return "Стрельба быстрее";
-    case UpgradeType::Dash: return "Рывок чаще и резче";
-    case UpgradeType::Energy: return "+30 энергии";
-    case UpgradeType::Shield: return "Щит тратит меньше энергии";
-    case UpgradeType::Magnet: return "Лут притягивается сильнее";
-    case UpgradeType::Shotgun: return "Пули летят веером";
-    case UpgradeType::Explosive: return "Пули взрываются при попадании";
-    case UpgradeType::Chain: return "Попадание бьёт рядом стоящего врага";
-    case UpgradeType::TimeSlow: return "Замедление времени сильнее";
-    case UpgradeType::CoreRepair: return "Починить ядро на 35 HP";
+    case UpgradeType::MaxHp: return "+25 HP and full heal";
+    case UpgradeType::Damage: return "+6 bullet damage";
+    case UpgradeType::FireRate: return "Shoot faster";
+    case UpgradeType::Dash: return "Shorter dash cooldown";
+    case UpgradeType::Energy: return "+30 max energy";
+    case UpgradeType::Shield: return "Cheaper shield drain";
+    case UpgradeType::Magnet: return "More pickup magnet";
+    case UpgradeType::Shotgun: return "Spread shots";
+    case UpgradeType::Explosive: return "Bullets explode";
+    case UpgradeType::Chain: return "Chain damage";
+    case UpgradeType::TimeSlow: return "Longer slow ability";
+    case UpgradeType::CoreRepair: return "Repair core +35 HP";
     }
     return "";
 }
@@ -240,6 +241,7 @@ static void SpawnPickup(PickupType type, Vector2 pos, float amount) {
 static void SpawnHazard() {
     float w = (float)GetScreenWidth();
     float h = (float)GetScreenHeight();
+
     Hazard hz;
     hz.pos = V2(Randf(120.0f, w - 120.0f), Randf(120.0f, h - 120.0f));
     hz.maxRadius = Randf(90.0f, 170.0f);
@@ -293,16 +295,19 @@ static void SpawnWave(int wave) {
 
         if (wave < 3) {
             t = (roll < 78) ? EnemyType::Chaser : EnemyType::Shooter;
-        } else if (wave < 6) {
+        }
+        else if (wave < 6) {
             if (roll < 48) t = EnemyType::Chaser;
             else if (roll < 74) t = EnemyType::Shooter;
             else t = EnemyType::Splitter;
-        } else if (wave < 10) {
+        }
+        else if (wave < 10) {
             if (roll < 33) t = EnemyType::Chaser;
             else if (roll < 58) t = EnemyType::Shooter;
             else if (roll < 80) t = EnemyType::Splitter;
             else t = EnemyType::Bruiser;
-        } else {
+        }
+        else {
             if (roll < 22) t = EnemyType::Chaser;
             else if (roll < 48) t = EnemyType::Shooter;
             else if (roll < 72) t = EnemyType::Splitter;
@@ -339,15 +344,17 @@ static void ResetRun() {
     g_player.energy = 100.0f;
     g_player.fireRate = 0.18f;
     g_player.bulletDamage = 18.0f;
-    g_player.dashCooldown = 1.15f;
+    g_player.dashCooldown = 1.10f;
     g_player.magnet = 120.0f;
+    g_player.shotgunLevel = 0;
+    g_player.explosiveShots = false;
+    g_player.chainShots = false;
 
     g_wave = 1;
     g_waveClearTimer = 0.0f;
     g_coreMaxHp = 150.0f;
     g_coreHp = g_coreMaxHp;
     g_screenShake = 0.0f;
-    g_hasChoices = false;
 
     ResetTouchLatches();
     g_state = GameState::Playing;
@@ -365,7 +372,6 @@ static void StartUpgradeScreen() {
     g_choices[0] = pool[0];
     g_choices[1] = pool[1];
     g_choices[2] = pool[2];
-    g_hasChoices = true;
     g_state = GameState::Upgrade;
     g_waveClearTimer = 0.0f;
     ResetTouchLatches();
@@ -407,7 +413,7 @@ static void ApplyUpgrade(UpgradeType t) {
         g_player.chainShots = true;
         break;
     case UpgradeType::TimeSlow:
-        g_player.skillCd = std::max(0.0f, g_player.skillCd - 1.5f);
+        g_player.slowCd = std::max(0.0f, g_player.slowCd - 1.5f);
         break;
     case UpgradeType::CoreRepair:
         g_coreHp = std::min(g_coreMaxHp, g_coreHp + 35.0f);
@@ -430,8 +436,8 @@ static void DamagePlayer(float amount) {
     }
 }
 
-static void FireAtNearestEnemy() {
-    if (g_enemies.empty()) return;
+static int FindNearestEnemyIndex() {
+    if (g_enemies.empty()) return -1;
 
     int best = -1;
     float bestD = 1e9f;
@@ -442,8 +448,14 @@ static void FireAtNearestEnemy() {
             best = i;
         }
     }
+    return best;
+}
 
-    Vector2 target = (best >= 0) ? g_enemies[best].pos : V2((float)GetScreenWidth() * 0.5f, 0.0f);
+static void FireAtNearestEnemy() {
+    int best = FindNearestEnemyIndex();
+    if (best < 0) return;
+
+    Vector2 target = g_enemies[best].pos;
     Vector2 dir = Norm(Sub(target, g_player.pos));
     if (Len(dir) < 0.001f) dir = V2(0, -1);
 
@@ -495,30 +507,29 @@ static TouchInput ReadTouchInput() {
     float w = (float)GetScreenWidth();
     float h = (float)GetScreenHeight();
 
-    Rectangle startRect = { w * 0.5f - 150.0f, h * 0.68f, 300.0f, 82.0f };
-    Rectangle fireRect = { w - 175.0f, h - 180.0f, 155.0f, 155.0f };
-    Rectangle dashRect = { w - 335.0f, h - 160.0f, 125.0f, 125.0f };
-    Rectangle shieldRect = { w - 175.0f, h - 340.0f, 155.0f, 125.0f };
-    Rectangle skillRect = { w - 335.0f, h - 300.0f, 125.0f, 125.0f };
+    Rectangle startRect = { w * 0.5f - 110.0f, h * 0.68f, 220.0f, 72.0f };
+
+    Rectangle dashRect = { w - 104.0f, h - 92.0f, 74.0f, 74.0f };
+    Rectangle shieldRect = { w - 192.0f, h - 84.0f, 78.0f, 50.0f };
+    Rectangle slowRect = { w - 192.0f, h - 140.0f, 78.0f, 50.0f };
 
     Rectangle upgradeRects[3] = {
-        { w * 0.5f - 500.0f, h * 0.38f, 300.0f, 170.0f },
-        { w * 0.5f - 150.0f, h * 0.38f, 300.0f, 170.0f },
-        { w * 0.5f + 200.0f, h * 0.38f, 300.0f, 170.0f }
+        { w * 0.5f - 330.0f, h * 0.38f, 210.0f, 150.0f },
+        { w * 0.5f - 105.0f, h * 0.38f, 210.0f, 150.0f },
+        { w * 0.5f + 120.0f, h * 0.38f, 210.0f, 150.0f }
     };
 
-    Vector2 joyBase = { 110.0f, h - 150.0f };
-    float joyRadius = 78.0f;
-    Rectangle joyZone = { 0.0f, h * 0.38f, w * 0.45f, h * 0.62f };
+    Vector2 joyBase = { 86.0f, h - 108.0f };
+    float joyRadius = 54.0f;
+    Rectangle joyZone = { 0.0f, h * 0.40f, w * 0.48f, h * 0.60f };
 
-    bool dashNow = false;
-    bool skillNow = false;
-    bool startNow = false;
-    bool shieldNow = false;
-    bool fireNow = false;
-    int upgradeNow = -1;
+    bool currentStart = false;
+    bool currentDash = false;
+    bool currentShield = false;
+    bool currentSlow = false;
+    int currentUpgrade = -1;
 
-    Vector2 bestJoyTouch = { 0,0 };
+    Vector2 joyTouch = { 0, 0 };
     bool joyFound = false;
     float bestJoyScore = 1e9f;
 
@@ -526,46 +537,67 @@ static TouchInput ReadTouchInput() {
     for (int i = 0; i < count; ++i) {
         Vector2 p = GetTouchPosition(i);
 
-        if (CheckCollisionPointRec(p, fireRect)) fireNow = true;
-        if (CheckCollisionPointRec(p, dashRect)) dashNow = true;
-        if (CheckCollisionPointRec(p, shieldRect)) shieldNow = true;
-        if (CheckCollisionPointRec(p, skillRect)) skillNow = true;
-        if (CheckCollisionPointRec(p, startRect)) startNow = true;
-
-        for (int u = 0; u < 3; ++u) {
-            if (CheckCollisionPointRec(p, upgradeRects[u])) upgradeNow = u;
+        if (g_state == GameState::Menu || g_state == GameState::GameOver) {
+            if (CheckCollisionPointRec(p, startRect)) currentStart = true;
         }
 
-        if (CheckCollisionPointRec(p, joyZone)) {
+        if (g_state == GameState::Playing) {
+            if (CheckCollisionPointRec(p, dashRect)) currentDash = true;
+            if (CheckCollisionPointRec(p, shieldRect)) currentShield = true;
+            if (CheckCollisionPointRec(p, slowRect)) currentSlow = true;
+        }
+
+        if (g_state == GameState::Upgrade) {
+            for (int u = 0; u < 3; ++u) {
+                if (CheckCollisionPointRec(p, upgradeRects[u])) currentUpgrade = u;
+            }
+        }
+
+        if (g_state == GameState::Playing && CheckCollisionPointRec(p, joyZone)) {
             float score = Dist(p, joyBase);
             if (score < bestJoyScore) {
                 bestJoyScore = score;
-                bestJoyTouch = p;
+                joyTouch = p;
                 joyFound = true;
             }
         }
     }
 
     if (joyFound) {
-        Vector2 delta = Sub(bestJoyTouch, joyBase);
+        Vector2 delta = Sub(joyTouch, joyBase);
         float len = Len(delta);
         if (len > joyRadius) delta = Mul(Norm(delta), joyRadius);
         in.move = Mul(delta, 1.0f / joyRadius);
     }
 
-    in.fireHeld = fireNow;
-    in.shieldHeld = shieldNow;
-    in.dashPressed = dashNow && !g_prevDash;
-    in.skillPressed = skillNow && !g_prevSkill;
-    in.startPressed = startNow && !g_prevStart;
-    in.upgradePressed = (upgradeNow >= 0 && !g_prevUpgrade[upgradeNow]) ? upgradeNow : -1;
+    in.startPressed = currentStart && !g_prevStart;
+    in.dashPressed = currentDash && !g_prevDash;
+    in.shieldHeld = currentShield;
+    in.slowPressed = currentSlow && !g_prevSlow;
 
-    g_prevStart = startNow;
-    g_prevDash = dashNow;
-    g_prevSkill = skillNow;
-    for (int u = 0; u < 3; ++u) {
-        g_prevUpgrade[u] = CheckCollisionPointRec((count > 0 ? GetTouchPosition(0) : Vector2{ -9999, -9999 }), upgradeRects[u]) && (upgradeNow == u);
+    if (g_state == GameState::Upgrade) {
+        for (int u = 0; u < 3; ++u) {
+            bool held = false;
+            for (int i = 0; i < count; ++i) {
+                Vector2 p = GetTouchPosition(i);
+                if (CheckCollisionPointRec(p, upgradeRects[u])) {
+                    held = true;
+                    break;
+                }
+            }
+            if (held && !g_prevUpgrade[u]) {
+                in.upgradePressed = u;
+            }
+            g_prevUpgrade[u] = held;
+        }
     }
+    else {
+        g_prevUpgrade = { false, false, false };
+    }
+
+    g_prevStart = currentStart;
+    g_prevDash = currentDash;
+    g_prevSlow = currentSlow;
 
     return in;
 }
@@ -591,12 +623,14 @@ static void KillEnemy(size_t index) {
         SpawnPickup(PickupType::Scrap, e.pos, 2.0f);
         SpawnEnemy(EnemyType::Chaser, Add(e.pos, V2(18, 0)));
         SpawnEnemy(EnemyType::Chaser, Add(e.pos, V2(-18, 0)));
-    } else if (e.type == EnemyType::Boss) {
+    }
+    else if (e.type == EnemyType::Boss) {
         for (int i = 0; i < 8; ++i) {
             SpawnPickup(PickupType::Scrap, Add(e.pos, V2(Randf(-18, 18), Randf(-18, 18))), 4.0f);
         }
         SpawnPickup(PickupType::Heart, e.pos, 1.0f);
-    } else {
+    }
+    else {
         if (Randi(0, 100) < 28) SpawnPickup(PickupType::Scrap, e.pos, (float)Randi(1, 4));
         if (Randi(0, 100) < 14) SpawnPickup(PickupType::Energy, e.pos, (float)Randi(10, 20));
         if (Randi(0, 100) < 6) SpawnPickup(PickupType::Heart, e.pos, 1.0f);
@@ -605,10 +639,10 @@ static void KillEnemy(size_t index) {
     g_enemies.erase(g_enemies.begin() + (long)index);
 }
 
-static void UpdatePlayer(float dt) {
+static void UpdatePlayer(float dt, const TouchInput& input) {
     if (g_player.dashCd > 0.0f) g_player.dashCd -= dt;
-    if (g_player.skillCd > 0.0f) g_player.skillCd -= dt;
-    if (g_player.fireTimer > 0.0f) g_player.fireTimer -= dt;
+    if (g_player.slowCd > 0.0f) g_player.slowCd -= dt;
+    if (g_player.fireCd > 0.0f) g_player.fireCd -= dt;
     if (g_player.invuln > 0.0f) g_player.invuln -= dt;
     if (g_player.dashTime > 0.0f) g_player.dashTime -= dt;
     if (g_player.slowTimer > 0.0f) g_player.slowTimer -= dt;
@@ -616,9 +650,8 @@ static void UpdatePlayer(float dt) {
 
     g_player.energy = std::min(g_player.maxEnergy, g_player.energy + 10.0f * dt);
 
-    Vector2 move = g_input.move;
+    Vector2 move = input.move;
     if (Len(move) <= 0.001f) {
-        // fallback for desktop testing
         if (IsKeyDown(KEY_A)) move.x -= 1.0f;
         if (IsKeyDown(KEY_D)) move.x += 1.0f;
         if (IsKeyDown(KEY_W)) move.y -= 1.0f;
@@ -626,7 +659,7 @@ static void UpdatePlayer(float dt) {
         move = Norm(move);
     }
 
-    if (g_input.dashPressed && g_player.dashCd <= 0.0f) {
+    if (input.dashPressed && g_player.dashCd <= 0.0f) {
         Vector2 dashDir = move;
         if (Len(dashDir) <= 0.001f) dashDir = V2(0, -1);
         g_player.vel = Add(g_player.vel, Mul(dashDir, g_player.dashSpeed));
@@ -636,9 +669,9 @@ static void UpdatePlayer(float dt) {
         g_screenShake = 0.10f;
     }
 
-    if (g_input.skillPressed && g_player.skillCd <= 0.0f && g_player.energy >= 30.0f) {
+    if (input.slowPressed && g_player.slowCd <= 0.0f && g_player.energy >= 30.0f) {
         g_player.energy -= 30.0f;
-        g_player.skillCd = 8.0f;
+        g_player.slowCd = 8.0f;
         g_player.slowTimer = 3.5f;
         g_screenShake = 0.08f;
     }
@@ -650,24 +683,16 @@ static void UpdatePlayer(float dt) {
     g_player.pos = Add(g_player.pos, Mul(g_player.vel, dt));
     g_player.pos = ClampToScreen(g_player.pos, 20.0f);
 
-    if (g_input.fireHeld) {
-        if (g_player.fireTimer <= 0.0f) {
-            FireAtNearestEnemy();
-            g_player.fireTimer = g_player.fireRate * 0.55f;
-        }
-    } else {
-        if (g_player.fireTimer <= 0.0f) {
-            FireAtNearestEnemy();
-            g_player.fireTimer = g_player.fireRate;
-        }
+    if (g_player.fireCd <= 0.0f) {
+        FireAtNearestEnemy();
+        g_player.fireCd = g_player.fireRate;
     }
 
-    if (g_input.shieldHeld && g_player.energy > 0.0f) {
+    if (input.shieldHeld && g_player.energy > 0.0f) {
         g_player.energy -= g_player.shieldDrain * g_player.shieldEff * dt;
         if (g_player.energy < 0.0f) g_player.energy = 0.0f;
     }
 
-    // Small auto-repair when standing near core and spending scrap.
     Vector2 core = V2((float)GetScreenWidth() * 0.5f, (float)GetScreenHeight() * 0.5f);
     if (Dist(g_player.pos, core) < 95.0f && g_player.scrap >= 5 && g_coreHp < g_coreMaxHp) {
         g_player.scrap -= 5;
@@ -688,17 +713,18 @@ static void UpdateEnemies(float dt) {
 
         Vector2 toPlayer = Sub(g_player.pos, e.pos);
         Vector2 toCore = Sub(core, e.pos);
-
         Vector2 dir = Norm((Len(toPlayer) < 280.0f || e.type == EnemyType::Boss) ? toPlayer : toCore);
 
         switch (e.type) {
         case EnemyType::Chaser:
             e.vel = Add(Mul(dir, e.speed), Mul(e.vel, 0.08f));
             break;
+
         case EnemyType::Shooter:
             if (Len(toPlayer) < 220.0f) {
                 e.vel = Add(Mul(Norm(Mul(toPlayer, -1.0f)), 82.0f), Mul(e.vel, 0.04f));
-            } else {
+            }
+            else {
                 e.vel = Add(Mul(dir, e.speed), Mul(e.vel, 0.05f));
             }
             if (e.fireCd <= 0.0f && Dist(e.pos, g_player.pos) < 420.0f) {
@@ -706,12 +732,15 @@ static void UpdateEnemies(float dt) {
                 e.fireCd = Randf(1.0f, 1.45f);
             }
             break;
+
         case EnemyType::Splitter:
             e.vel = Add(Mul(dir, e.speed), Mul(e.vel, 0.08f));
             break;
+
         case EnemyType::Bruiser:
             e.vel = Add(Mul(dir, e.speed), Mul(e.vel, 0.05f));
             break;
+
         case EnemyType::Turret:
             e.vel = Mul(e.vel, 0.0f);
             if (e.fireCd <= 0.0f && Dist(e.pos, g_player.pos) < 520.0f) {
@@ -719,6 +748,7 @@ static void UpdateEnemies(float dt) {
                 e.fireCd = Randf(0.9f, 1.25f);
             }
             break;
+
         case EnemyType::Boss:
             e.vel = Add(Mul(dir, e.speed), Mul(e.vel, 0.03f));
             if (e.fireCd <= 0.0f) {
@@ -750,10 +780,17 @@ static void UpdateEnemies(float dt) {
         }
 
         if (Dist(e.pos, g_player.pos) < e.radius + 14.0f) {
-            if (g_input.shieldHeld && g_player.energy > 0.0f) {
-                e.hp -= 15.0f * dt;
-                g_player.energy -= g_player.shieldDrain * g_player.shieldEff * 0.5f * dt;
-            } else {
+            if (g_player.energy > 0.0f && IsKeyDown(KEY_UNUSED) == false) {
+                if (g_player.shieldDrain > 0.0f) {
+                    if (g_player.slowTimer >= 0.0f) {
+                        if (g_player.energy > 0.0f) {
+                            e.hp -= 15.0f * dt;
+                            g_player.energy -= g_player.shieldDrain * g_player.shieldEff * 0.5f * dt;
+                        }
+                    }
+                }
+            }
+            else {
                 DamagePlayer((e.type == EnemyType::Boss ? 28.0f : 12.0f) * dt);
             }
         }
@@ -827,11 +864,22 @@ static void UpdateBullets(float dt) {
                     break;
                 }
             }
-        } else {
-            bool block = g_input.shieldHeld && g_player.energy > 0.0f;
-            if (block && Dist(b.pos, g_player.pos) < 42.0f) {
+        }
+        else {
+            bool shieldHeld = false;
+            int tc = GetTouchPointCount();
+            Rectangle shieldRect = { (float)GetScreenWidth() - 192.0f, (float)GetScreenHeight() - 84.0f, 78.0f, 50.0f };
+            for (int t = 0; t < tc; ++t) {
+                if (CheckCollisionPointRec(GetTouchPosition(t), shieldRect)) {
+                    shieldHeld = true;
+                    break;
+                }
+            }
+
+            if (shieldHeld && g_player.energy > 0.0f) {
                 removed = true;
-            } else if (Dist(b.pos, g_player.pos) < b.radius + 14.0f) {
+            }
+            else if (Dist(b.pos, g_player.pos) < b.radius + 14.0f) {
                 DamagePlayer(b.damage);
                 removed = true;
             }
@@ -863,10 +911,12 @@ static void UpdatePickups(float dt) {
             if (p.type == PickupType::Scrap) {
                 g_player.scrap += (int)p.amount;
                 g_player.score += 3 * (int)p.amount;
-            } else if (p.type == PickupType::Energy) {
+            }
+            else if (p.type == PickupType::Energy) {
                 g_player.energy = std::min(g_player.maxEnergy, g_player.energy + p.amount);
                 g_player.score += 4;
-            } else {
+            }
+            else {
                 g_player.hp = std::min(g_player.maxHp, g_player.hp + 22.0f);
                 g_player.score += 8;
             }
@@ -912,66 +962,12 @@ static void TryEndWave() {
 
     if (g_enemies.empty()) {
         g_waveClearTimer += GetFrameTime();
-        if (g_waveClearTimer > 1.2f) {
+        if (g_waveClearTimer > 1.0f) {
             StartUpgradeScreen();
         }
-    } else {
+    }
+    else {
         g_waveClearTimer = 0.0f;
-    }
-}
-
-static void UpdateGame(float dt) {
-    g_input = ReadTouchInput();
-
-    if (g_state == GameState::Menu) {
-        if (g_input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            ResetRun();
-        }
-        return;
-    }
-
-    if (g_state == GameState::GameOver) {
-        if (g_input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            ResetRun();
-        }
-        return;
-    }
-
-    if (g_state == GameState::Upgrade) {
-        if (g_input.upgradePressed >= 0) {
-            ApplyUpgrade(g_choices[g_input.upgradePressed]);
-            g_wave++;
-            g_state = GameState::Playing;
-            g_hasChoices = false;
-            ResetTouchLatches();
-            SpawnWave(g_wave);
-        }
-        return;
-    }
-
-    if (g_coreHp <= 0.0f) {
-        g_state = GameState::GameOver;
-        ResetTouchLatches();
-        return;
-    }
-
-    UpdatePlayer(dt);
-    UpdateEnemies(dt);
-    UpdateBullets(dt);
-    UpdatePickups(dt);
-    UpdateHazards(dt);
-
-    if (g_player.hp <= 0.0f || g_coreHp <= 0.0f) {
-        g_state = GameState::GameOver;
-        ResetTouchLatches();
-        return;
-    }
-
-    TryEndWave();
-
-    // Bonus: tap on empty space with 2 fingers in mobile browsers is fine; no extra logic needed.
-    if (g_player.slowTimer > 0.0f && g_player.skillCd <= 0.0f) {
-        g_player.skillCd = 8.0f;
     }
 }
 
@@ -982,39 +978,38 @@ static void DrawBar(int x, int y, int w, int h, float pct, Color fill, Color bac
     DrawText(label, x, y - 18, 12, RAYWHITE);
 }
 
-static void DrawTouchUI() {
+static void DrawButton(Rectangle r, const char* text, Color fill, bool active) {
+    DrawRectangleRounded(r, 0.22f, 8, Fade(fill, active ? 0.92f : 0.62f));
+    DrawRectangleRoundedLines(r, 0.22f, 8, Fade(WHITE, 0.18f));
+    int fontSize = 14;
+    int tw = MeasureText(text, fontSize);
+    DrawText(text, (int)(r.x + r.width * 0.5f - tw * 0.5f), (int)(r.y + r.height * 0.5f - 7), fontSize, RAYWHITE);
+}
+
+static void DrawTouchUI(const TouchInput& input) {
     float w = (float)GetScreenWidth();
     float h = (float)GetScreenHeight();
 
-    Vector2 joyBase = { 110.0f, h - 150.0f };
-    float joyRadius = 78.0f;
-
-    Rectangle fireRect = { w - 175.0f, h - 180.0f, 155.0f, 155.0f };
-    Rectangle dashRect = { w - 335.0f, h - 160.0f, 125.0f, 125.0f };
-    Rectangle shieldRect = { w - 175.0f, h - 340.0f, 155.0f, 125.0f };
-    Rectangle skillRect = { w - 335.0f, h - 300.0f, 125.0f, 125.0f };
+    Vector2 joyBase = { 86.0f, h - 108.0f };
+    float joyRadius = 54.0f;
 
     DrawCircleLines((int)joyBase.x, (int)joyBase.y, joyRadius, Fade(WHITE, 0.20f));
-    DrawCircleLines((int)joyBase.x, (int)joyBase.y, joyRadius * 0.55f, Fade(WHITE, 0.12f));
-    Vector2 knob = Add(joyBase, Mul(g_input.move, joyRadius));
-    DrawCircleV(knob, 26.0f, Fade(SKYBLUE, 0.85f));
+    DrawCircleLines((int)joyBase.x, (int)joyBase.y, joyRadius * 0.58f, Fade(WHITE, 0.10f));
+    Vector2 knob = Add(joyBase, Mul(input.move, joyRadius));
+    DrawCircleV(knob, 18.0f, Fade(SKYBLUE, 0.85f));
 
-    auto drawButton = [&](Rectangle r, const char* text, Color c, bool held) {
-        DrawRectangleRounded(r, 0.22f, 10, Fade(c, held ? 0.85f : 0.55f));
-        DrawRectangleRoundedLines(r, 0.22f, 10, Fade(WHITE, 0.18f));
-        int tw = MeasureText(text, 20);
-        DrawText(text, (int)(r.x + r.width * 0.5f - tw * 0.5f), (int)(r.y + r.height * 0.5f - 10), 20, RAYWHITE);
-    };
+    Rectangle dashRect = { w - 104.0f, h - 92.0f, 74.0f, 74.0f };
+    Rectangle shieldRect = { w - 192.0f, h - 84.0f, 78.0f, 50.0f };
+    Rectangle slowRect = { w - 192.0f, h - 140.0f, 78.0f, 50.0f };
 
-    drawButton(fireRect, "FIRE", ORANGE, g_input.fireHeld);
-    drawButton(dashRect, "DASH", BLUE, g_input.dashPressed);
-    drawButton(shieldRect, "SHIELD", SKYBLUE, g_input.shieldHeld);
-    drawButton(skillRect, "SLOW", PURPLE, g_input.skillPressed);
+    DrawButton(dashRect, "DASH", BLUE, input.dashPressed);
+    DrawButton(shieldRect, "SHIELD", SKYBLUE, input.shieldHeld);
+    DrawButton(slowRect, "SLOW", PURPLE, input.slowPressed);
 }
 
 static void DrawGame() {
     BeginDrawing();
-    ClearBackground({ 12, 13, 18, 255 });
+    ClearBackground(Color{ 12, 13, 18, 255 });
 
     float shakeX = 0.0f;
     float shakeY = 0.0f;
@@ -1065,7 +1060,8 @@ static void DrawGame() {
         if (b.fromPlayer) {
             DrawCircleV(b.pos, b.radius, b.explosive ? ORANGE : YELLOW);
             if (b.chain) DrawCircleLines((int)b.pos.x, (int)b.pos.y, 8.0f, Fade(SKYBLUE, 0.7f));
-        } else {
+        }
+        else {
             DrawCircleV(b.pos, b.radius, RED);
         }
     }
@@ -1096,44 +1092,43 @@ static void DrawGame() {
 
     EndMode2D();
 
-    DrawRectangle(14, 14, 340, 164, Fade(BLACK, 0.58f));
-    DrawRectangleLines(14, 14, 340, 164, Fade(WHITE, 0.12f));
+    DrawRectangle(14, 14, 310, 164, Fade(BLACK, 0.58f));
+    DrawRectangleLines(14, 14, 310, 164, Fade(WHITE, 0.12f));
 
-    DrawText(TextFormat("Волна: %d", g_wave), 24, 22, 22, RAYWHITE);
-    DrawText(TextFormat("Счёт: %d", g_player.score), 24, 48, 20, GOLD);
-    DrawText(TextFormat("Добыча: %d", g_player.scrap), 24, 70, 20, ORANGE);
+    DrawText(TextFormat("WAVE: %d", g_wave), 24, 22, 22, RAYWHITE);
+    DrawText(TextFormat("SCORE: %d", g_player.score), 24, 48, 20, GOLD);
+    DrawText(TextFormat("SCRAP: %d", g_player.scrap), 24, 70, 20, ORANGE);
 
-    DrawBar(24, 98, 290, 14, g_player.hp / g_player.maxHp, RED, Color{ 60, 25, 25, 255 }, "HP");
-    DrawBar(24, 124, 290, 14, g_player.energy / g_player.maxEnergy, SKYBLUE, Color{ 25, 35, 50, 255 }, "ENERGY");
-    DrawBar(24, 150, 290, 14, g_coreHp / g_coreMaxHp, GREEN, Color{ 20, 40, 20, 255 }, "CORE");
+    DrawBar(24, 98, 260, 14, g_player.hp / g_player.maxHp, RED, Color{ 60, 25, 25, 255 }, "HP");
+    DrawBar(24, 124, 260, 14, g_player.energy / g_player.maxEnergy, SKYBLUE, Color{ 25, 35, 50, 255 }, "ENERGY");
+    DrawBar(24, 150, 260, 14, g_coreHp / g_coreMaxHp, GREEN, Color{ 20, 40, 20, 255 }, "CORE");
 
-    DrawTouchUI();
+    DrawTouchUI(g_input);
 
-    float screenH = (float)GetScreenHeight();
-    DrawText("Левый джойстик — движение", 24, (int)h - 28, 16, Fade(WHITE, 0.75f));
-    DrawText("FIRE — авто-огонь, SHIELD — держи, DASH — рывок, SLOW — замедление", 24, (int)h - 48, 16, Fade(WHITE, 0.75f));
+    DrawText("LEFT: MOVE   DASH: BURST   SHIELD: HOLD   SLOW: ABILITY", 18, (int)h - 22, 14, Fade(WHITE, 0.72f));
+    DrawText("AUTO FIRE IS ON", (int)w - 126, 18, 14, Fade(WHITE, 0.72f));
 
     if (g_state == GameState::Menu) {
-        DrawRectangle(0, 0, (int)w, (int)h, Fade(BLACK, 0.72f));
-        DrawText("CHRONO VIGIL", (int)(w * 0.5f) - MeasureText("CHRONO VIGIL", 48) / 2, (int)(h * 0.28f), 48, RAYWHITE);
-        DrawText("Защищай ядро, переживай волны, собирай ресурсы и усиливайся",
-            (int)(w * 0.5f) - MeasureText("Защищай ядро, переживай волны, собирай ресурсы и усиливайся", 20) / 2,
-            (int)(h * 0.40f), 20, Fade(RAYWHITE, 0.88f));
+        DrawRectangle(0, 0, (int)w, (int)h, Fade(BLACK, 0.74f));
+        DrawText("CHRONO VIGIL", (int)(w * 0.5f) - MeasureText("CHRONO VIGIL", 46) / 2, (int)(h * 0.26f), 46, RAYWHITE);
+        DrawText("Survive waves, protect the core, upgrade fast",
+            (int)(w * 0.5f) - MeasureText("Survive waves, protect the core, upgrade fast", 18) / 2,
+            (int)(h * 0.39f), 18, Fade(RAYWHITE, 0.85f));
 
-        Rectangle startRect = { w * 0.5f - 150.0f, h * 0.68f, 300.0f, 82.0f };
-        DrawRectangleRounded(startRect, 0.18f, 10, Fade(BLUE, 0.9f));
-        DrawRectangleRoundedLines(startRect, 0.18f, 10, Fade(WHITE, 0.2f));
-        DrawText("НАЧАТЬ", (int)(startRect.x + startRect.width * 0.5f - MeasureText("НАЧАТЬ", 28) / 2), (int)(startRect.y + 22), 28, RAYWHITE);
-        DrawText("Tap / Enter", (int)(w * 0.5f) - MeasureText("Tap / Enter", 18) / 2, (int)(h * 0.80f), 18, Fade(WHITE, 0.75f));
+        Rectangle startRect = { w * 0.5f - 110.0f, h * 0.67f, 220.0f, 72.0f };
+        DrawRectangleRounded(startRect, 0.18f, 10, Fade(BLUE, 0.92f));
+        DrawRectangleRoundedLines(startRect, 0.18f, 10, Fade(WHITE, 0.18f));
+        DrawText("START", (int)(startRect.x + startRect.width * 0.5f - MeasureText("START", 28) / 2), (int)(startRect.y + 20), 28, RAYWHITE);
+        DrawText("Tap / Enter", (int)(w * 0.5f) - MeasureText("Tap / Enter", 16) / 2, (int)(h * 0.80f), 16, Fade(WHITE, 0.68f));
     }
 
     if (g_state == GameState::Upgrade) {
         DrawRectangle(0, 0, (int)w, (int)h, Fade(BLACK, 0.78f));
-        DrawText("Выбери улучшение", (int)(w * 0.5f) - MeasureText("Выбери улучшение", 34) / 2, 48, 34, RAYWHITE);
+        DrawText("CHOOSE UPGRADE", (int)(w * 0.5f) - MeasureText("CHOOSE UPGRADE", 30) / 2, 40, 30, RAYWHITE);
 
-        const int cardW = 300;
-        const int cardH = 170;
-        const int gap = 50;
+        const int cardW = 210;
+        const int cardH = 150;
+        const int gap = 15;
         int totalW = cardW * 3 + gap * 2;
         int startX = (int)(w * 0.5f) - totalW / 2;
         int y = (int)(h * 0.38f);
@@ -1144,59 +1139,103 @@ static void DrawGame() {
             bool hover = CheckCollisionPointRec(GetMousePosition(), r);
 
             DrawRectangleRounded(r, 0.16f, 10, hover ? Fade(SKYBLUE, 0.24f) : Fade(WHITE, 0.08f));
-            DrawRectangleRoundedLines(r, 0.16f, 10, hover ? SKYBLUE : Fade(WHITE, 0.2f));
+            DrawRectangleRoundedLines(r, 0.16f, 10, hover ? SKYBLUE : Fade(WHITE, 0.18f));
 
-            DrawText(TextFormat("%d", i + 1), x + 14, y + 10, 22, YELLOW);
-            DrawText(UpgradeName(g_choices[i]), x + 18, y + 38, 24, RAYWHITE);
-            DrawText(UpgradeDesc(g_choices[i]), x + 18, y + 78, 16, Fade(RAYWHITE, 0.9f));
+            DrawText(TextFormat("%d", i + 1), x + 12, y + 8, 20, YELLOW);
+            DrawText(UpgradeName(g_choices[i]), x + 16, y + 34, 18, RAYWHITE);
+            DrawText(UpgradeDesc(g_choices[i]), x + 16, y + 70, 14, Fade(RAYWHITE, 0.88f));
         }
 
-        DrawText("Тапни 1 / 2 / 3 или нажми по карточке", (int)(w * 0.5f) - MeasureText("Тапни 1 / 2 / 3 или нажми по карточке", 20) / 2, (int)h - 80, 20, GOLD);
+        DrawText("Tap one card", (int)(w * 0.5f) - MeasureText("Tap one card", 18) / 2, (int)h - 70, 18, GOLD);
     }
 
     if (g_state == GameState::GameOver) {
         DrawRectangle(0, 0, (int)w, (int)h, Fade(BLACK, 0.82f));
-        DrawText("Ядро пало", (int)(w * 0.5f) - MeasureText("Ядро пало", 48) / 2, (int)(h * 0.30f), 48, RED);
-        DrawText(TextFormat("Волна: %d", g_wave), (int)(w * 0.5f) - MeasureText(TextFormat("Волна: %d", g_wave), 28) / 2, (int)(h * 0.43f), 28, RAYWHITE);
-        DrawText(TextFormat("Счёт: %d", g_player.score), (int)(w * 0.5f) - MeasureText(TextFormat("Счёт: %d", g_player.score), 26) / 2, (int)(h * 0.50f), 26, GOLD);
+        DrawText("GAME OVER", (int)(w * 0.5f) - MeasureText("GAME OVER", 46) / 2, (int)(h * 0.30f), 46, RED);
+        DrawText(TextFormat("WAVE: %d", g_wave), (int)(w * 0.5f) - MeasureText(TextFormat("WAVE: %d", g_wave), 26) / 2, (int)(h * 0.43f), 26, RAYWHITE);
+        DrawText(TextFormat("SCORE: %d", g_player.score), (int)(w * 0.5f) - MeasureText(TextFormat("SCORE: %d", g_player.score), 24) / 2, (int)(h * 0.50f), 24, GOLD);
 
-        Rectangle startRect = { w * 0.5f - 150.0f, h * 0.68f, 300.0f, 82.0f };
-        DrawRectangleRounded(startRect, 0.18f, 10, Fade(RED, 0.9f));
-        DrawRectangleRoundedLines(startRect, 0.18f, 10, Fade(WHITE, 0.2f));
-        DrawText("ЗАНОВО", (int)(startRect.x + startRect.width * 0.5f - MeasureText("ЗАНОВО", 28) / 2), (int)(startRect.y + 22), 28, RAYWHITE);
+        Rectangle startRect = { w * 0.5f - 110.0f, h * 0.67f, 220.0f, 72.0f };
+        DrawRectangleRounded(startRect, 0.18f, 10, Fade(RED, 0.90f));
+        DrawRectangleRoundedLines(startRect, 0.18f, 10, Fade(WHITE, 0.18f));
+        DrawText("RESTART", (int)(startRect.x + startRect.width * 0.5f - MeasureText("RESTART", 28) / 2), (int)(startRect.y + 20), 28, RAYWHITE);
     }
 
     EndDrawing();
 }
 
-static void GameLoop() {
-    float dt = GetFrameTime();
-    if (dt > 0.033f) dt = 0.033f;
+static void UpdateGame(float dt) {
+    TouchInput input = ReadTouchInput();
 
-    UpdateGame(dt);
-
-    if (g_state == GameState::Playing) {
-        if (g_player.slowTimer > 0.0f) {
-            // visually keep skill active; logic already uses slowTimer
+    if (g_state == GameState::Menu) {
+        if (input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            ResetRun();
         }
+        DrawGame();
+        return;
     }
+
+    if (g_state == GameState::GameOver) {
+        if (input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            ResetRun();
+        }
+        DrawGame();
+        return;
+    }
+
+    if (g_state == GameState::Upgrade) {
+        if (input.upgradePressed >= 0) {
+            ApplyUpgrade(g_choices[input.upgradePressed]);
+            g_wave++;
+            g_state = GameState::Playing;
+            SpawnWave(g_wave);
+        }
+        DrawGame();
+        return;
+    }
+
+    if (g_coreHp <= 0.0f || g_player.hp <= 0.0f) {
+        g_state = GameState::GameOver;
+        DrawGame();
+        return;
+    }
+
+    UpdatePlayer(dt, input);
+    UpdateEnemies(dt);
+    UpdateBullets(dt);
+    UpdatePickups(dt);
+    UpdateHazards(dt);
+
+    if (g_player.hp <= 0.0f || g_coreHp <= 0.0f) {
+        g_state = GameState::GameOver;
+        DrawGame();
+        return;
+    }
+
+    TryEndWave();
 
     DrawGame();
 }
 
 int main() {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
-    InitWindow(1280, 720, "Chrono Vigil - Mobile raylib");
+    InitWindow(1280, 720, "Chrono Vigil");
     SetTargetFPS(60);
 
     g_player.pos = V2(640.0f, 520.0f);
     g_state = GameState::Menu;
 
 #ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop(GameLoop, 0, 1);
+    emscripten_set_main_loop([]() {
+        float dt = GetFrameTime();
+        if (dt > 0.033f) dt = 0.033f;
+        UpdateGame(dt);
+    }, 0, 1);
 #else
     while (!WindowShouldClose()) {
-        GameLoop();
+        float dt = GetFrameTime();
+        if (dt > 0.033f) dt = 0.033f;
+        UpdateGame(dt);
     }
     CloseWindow();
 #endif
