@@ -362,6 +362,7 @@ static void ResetRun() {
 }
 
 static void StartUpgradeScreen() {
+    g_upgradeLockTimer = 0.4f;
     std::vector<UpgradeType> pool = {
         UpgradeType::MaxHp, UpgradeType::Damage, UpgradeType::FireRate, UpgradeType::Dash,
         UpgradeType::Energy, UpgradeType::Shield, UpgradeType::Magnet, UpgradeType::Shotgun,
@@ -504,6 +505,7 @@ static void SpawnShockwave(Vector2 center) {
 static float g_upgradeLockTimer = 0.0f;
 static TouchInput ReadTouchInput() {
     TouchInput in{};
+    in.upgradePressed = -1;
 
     float w = (float)GetScreenWidth();
     float h = (float)GetScreenHeight();
@@ -537,6 +539,8 @@ static TouchInput ReadTouchInput() {
     float bestJoyScore = 1e9f;
 
     int count = GetTouchPointCount();
+    int action = GetTouchAction();
+
     for (int i = 0; i < count; ++i) {
         Vector2 p = GetTouchPosition(i);
 
@@ -558,6 +562,17 @@ static TouchInput ReadTouchInput() {
                 joyFound = true;
             }
         }
+
+        if (g_state == GameState::Upgrade && g_upgradeLockTimer <= 0.0f) {
+            if (action == TOUCH_ACTION_DOWN) {
+                for (int u = 0; u < 3; ++u) {
+                    if (CheckCollisionPointRec(p, upgradeRects[u])) {
+                        in.upgradePressed = u;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     if (joyFound) {
@@ -574,28 +589,7 @@ static TouchInput ReadTouchInput() {
     in.shieldHeld = currentShield;
     in.slowPressed = currentSlow && !g_prevSlow;
 
-    if (g_state == GameState::Upgrade) {
-        for (int u = 0; u < 3; ++u) {
-            bool held = false;
-            
-            if (g_upgradeLockTimer <= 0.0f) {
-                for (int i = 0; i < count; ++i) {
-                    Vector2 p = GetTouchPosition(i);
-                    if (CheckCollisionPointRec(p, upgradeRects[u])) {
-                        held = true;
-                        break;
-                    }
-                }
-            }
-
-            if (held && !g_prevUpgrade[u]) {
-                in.upgradePressed = u;
-            }
-            g_prevUpgrade[u] = held;
-        }
-    } else {
-        g_prevUpgrade = { false, false, false };
-    }
+    g_prevUpgrade = { false, false, false };
 
     g_prevStart = currentStart;
     g_prevDash = currentDash;
