@@ -1,10 +1,13 @@
 name: Build Raylib WebAssembly Game
 
 on:
+  workflow_dispatch:
+
   push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
+    branches:
+      - main
+      - master
+      - new
 
 jobs:
   build-web:
