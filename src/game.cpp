@@ -166,6 +166,7 @@ struct TouchInput {
 };
 
 static GameState g_state = GameState::Menu;
+static float g_upgradeLockTimer = 0.0f;
 static Player g_player;
 
 static std::vector<Enemy> g_enemies;
@@ -502,7 +503,6 @@ static void SpawnShockwave(Vector2 center) {
     g_screenShake = 0.24f;
 }
 
-static float g_upgradeLockTimer = 0.0f;
 static TouchInput ReadTouchInput() {
     TouchInput in{};
     in.upgradePressed = -1;
@@ -538,11 +538,13 @@ static TouchInput ReadTouchInput() {
     bool joyFound = false;
     float bestJoyScore = 1e9f;
 
-    int count = GetTouchPointCount();
-    int action = GetTouchAction();
+    static int activeJoystickTouchId = -1; 
+    bool joystickIdStillActive = false;
 
+    int count = GetTouchPointCount();
     for (int i = 0; i < count; ++i) {
         Vector2 p = GetTouchPosition(i);
+        int touchId = GetTouchPointId(i);
 
         if (g_state == GameState::Menu || g_state == GameState::GameOver) {
             if (CheckCollisionPointRec(p, startRect)) currentStart = true;
@@ -555,21 +557,41 @@ static TouchInput ReadTouchInput() {
         }
 
         if (g_state == GameState::Playing && CheckCollisionPointRec(p, joyZone)) {
-            float score = Dist(p, joyBase);
-            if (score < bestJoyScore) {
-                bestJoyScore = score;
-                joyTouch = p;
-                joyFound = true;
+            if (activeJoystickTouchId == -1 || activeJoystickTouchId == touchId) {
+                float score = Dist(p, joyBase);
+                if (score < bestJoyScore) {
+                    bestJoyScore = score;
+                    joyTouch = p;
+                    joyFound = true;
+                    activeJoystickTouchId = touchId;
+                    joystickIdStillActive = true;
+                }
             }
         }
 
         if (g_state == GameState::Upgrade && g_upgradeLockTimer <= 0.0f) {
-            if (action == TOUCH_ACTION_DOWN) {
+            if (touchId != activeJoystickTouchId) {
                 for (int u = 0; u < 3; ++u) {
-                    if (CheckCollisionPointRec(p, upgradeRects[u])) {
+                    if (CheckCollisionPointRec(p, upgradeRects[u]) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         in.upgradePressed = u;
                         break;
                     }
+                }
+            }
+        }
+    }
+
+    if (!joystickIdStillActive) {
+        activeJoystickTouchId = -1;
+    }
+
+    if (g_state == GameState::Upgrade && g_upgradeLockTimer <= 0.0f && in.upgradePressed == -1) {
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            Vector2 m = GetMousePosition();
+            for (int u = 0; u < 3; ++u) {
+                if (CheckCollisionPointRec(m, upgradeRects[u])) {
+                    in.upgradePressed = u;
+                    break;
                 }
             }
         }
@@ -588,8 +610,6 @@ static TouchInput ReadTouchInput() {
     in.dashPressed = currentDash && !g_prevDash;
     in.shieldHeld = currentShield;
     in.slowPressed = currentSlow && !g_prevSlow;
-
-    g_prevUpgrade = { false, false, false };
 
     g_prevStart = currentStart;
     g_prevDash = currentDash;
