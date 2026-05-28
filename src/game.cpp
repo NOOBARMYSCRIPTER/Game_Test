@@ -501,14 +501,18 @@ static void SpawnShockwave(Vector2 center) {
     g_screenShake = 0.24f;
 }
 
+static float g_upgradeLockTimer = 0.0f;
 static TouchInput ReadTouchInput() {
     TouchInput in{};
 
     float w = (float)GetScreenWidth();
     float h = (float)GetScreenHeight();
 
-    Rectangle startRect = { w * 0.5f - 110.0f, h * 0.68f, 220.0f, 72.0f };
+    if (g_state == GameState::Upgrade && g_upgradeLockTimer > 0.0f) {
+        g_upgradeLockTimer -= GetFrameTime();
+    }
 
+    Rectangle startRect = { w * 0.5f - 110.0f, h * 0.68f, 220.0f, 72.0f };
     Rectangle dashRect = { w - 104.0f, h - 92.0f, 74.0f, 74.0f };
     Rectangle shieldRect = { w - 192.0f, h - 84.0f, 78.0f, 50.0f };
     Rectangle slowRect = { w - 192.0f, h - 140.0f, 78.0f, 50.0f };
@@ -527,7 +531,6 @@ static TouchInput ReadTouchInput() {
     bool currentDash = false;
     bool currentShield = false;
     bool currentSlow = false;
-    int currentUpgrade = -1;
 
     Vector2 joyTouch = { 0, 0 };
     bool joyFound = false;
@@ -547,12 +550,6 @@ static TouchInput ReadTouchInput() {
             if (CheckCollisionPointRec(p, slowRect)) currentSlow = true;
         }
 
-        if (g_state == GameState::Upgrade) {
-            for (int u = 0; u < 3; ++u) {
-                if (CheckCollisionPointRec(p, upgradeRects[u])) currentUpgrade = u;
-            }
-        }
-
         if (g_state == GameState::Playing && CheckCollisionPointRec(p, joyZone)) {
             float score = Dist(p, joyBase);
             if (score < bestJoyScore) {
@@ -568,6 +565,8 @@ static TouchInput ReadTouchInput() {
         float len = Len(delta);
         if (len > joyRadius) delta = Mul(Norm(delta), joyRadius);
         in.move = Mul(delta, 1.0f / joyRadius);
+    } else {
+        in.move = V2(0, 0); 
     }
 
     in.startPressed = currentStart && !g_prevStart;
@@ -578,20 +577,23 @@ static TouchInput ReadTouchInput() {
     if (g_state == GameState::Upgrade) {
         for (int u = 0; u < 3; ++u) {
             bool held = false;
-            for (int i = 0; i < count; ++i) {
-                Vector2 p = GetTouchPosition(i);
-                if (CheckCollisionPointRec(p, upgradeRects[u])) {
-                    held = true;
-                    break;
+            
+            if (g_upgradeLockTimer <= 0.0f) {
+                for (int i = 0; i < count; ++i) {
+                    Vector2 p = GetTouchPosition(i);
+                    if (CheckCollisionPointRec(p, upgradeRects[u])) {
+                        held = true;
+                        break;
+                    }
                 }
             }
+
             if (held && !g_prevUpgrade[u]) {
                 in.upgradePressed = u;
             }
             g_prevUpgrade[u] = held;
         }
-    }
-    else {
+    } else {
         g_prevUpgrade = { false, false, false };
     }
 
@@ -1111,7 +1113,7 @@ static void DrawGame() {
 
     if (g_state == GameState::Menu) {
         DrawRectangle(0, 0, (int)w, (int)h, Fade(BLACK, 0.74f));
-        DrawText("CHRONO VIGIL", (int)(w * 0.5f) - MeasureText("CHRONO VIGIL", 46) / 2, (int)(h * 0.26f), 46, RAYWHITE);
+        DrawText("CHROME VIGIL", (int)(w * 0.5f) - MeasureText("CHROME VIGIL", 46) / 2, (int)(h * 0.26f), 46, RAYWHITE);
         DrawText("Survive waves, protect the core, upgrade fast",
             (int)(w * 0.5f) - MeasureText("Survive waves, protect the core, upgrade fast", 18) / 2,
             (int)(h * 0.39f), 18, Fade(RAYWHITE, 0.85f));
@@ -1137,6 +1139,7 @@ static void DrawGame() {
         for (int i = 0; i < 3; ++i) {
             int x = startX + i * (cardW + gap);
             Rectangle r = { (float)x, (float)y, (float)cardW, (float)cardH };
+            
             bool hover = CheckCollisionPointRec(GetMousePosition(), r);
 
             DrawRectangleRounded(r, 0.16f, 10, hover ? Fade(SKYBLUE, 0.24f) : Fade(WHITE, 0.08f));
@@ -1146,8 +1149,12 @@ static void DrawGame() {
             DrawText(UpgradeName(g_choices[i]), x + 16, y + 34, 18, RAYWHITE);
             DrawText(UpgradeDesc(g_choices[i]), x + 16, y + 70, 14, Fade(RAYWHITE, 0.88f));
         }
-
-        DrawText("Tap one card", (int)(w * 0.5f) - MeasureText("Tap one card", 18) / 2, (int)h - 70, 18, GOLD);
+        
+        if (g_upgradeLockTimer > 0.0f) {
+            DrawText("Loading...", (int)(w * 0.5f) - MeasureText("Loading...", 18) / 2, (int)h - 70, 18, GRAY);
+        } else {
+            DrawText("Tap one card", (int)(w * 0.5f) - MeasureText("Tap one card", 18) / 2, (int)h - 70, 18, GOLD);
+        }
     }
 
     if (g_state == GameState::GameOver) {
@@ -1166,10 +1173,10 @@ static void DrawGame() {
 }
 
 static void UpdateGame(float dt) {
-    TouchInput input = ReadTouchInput();
+    g_input = ReadTouchInput();
 
     if (g_state == GameState::Menu) {
-        if (input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (g_input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             ResetRun();
         }
         DrawGame();
@@ -1177,7 +1184,7 @@ static void UpdateGame(float dt) {
     }
 
     if (g_state == GameState::GameOver) {
-        if (input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (g_input.startPressed || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             ResetRun();
         }
         DrawGame();
@@ -1185,8 +1192,8 @@ static void UpdateGame(float dt) {
     }
 
     if (g_state == GameState::Upgrade) {
-        if (input.upgradePressed >= 0) {
-            ApplyUpgrade(g_choices[input.upgradePressed]);
+        if (g_input.upgradePressed >= 0) {
+            ApplyUpgrade(g_choices[g_input.upgradePressed]);
             g_wave++;
             g_state = GameState::Playing;
             SpawnWave(g_wave);
@@ -1201,7 +1208,7 @@ static void UpdateGame(float dt) {
         return;
     }
 
-    UpdatePlayer(dt, input);
+    UpdatePlayer(dt, g_input);
     UpdateEnemies(dt);
     UpdateBullets(dt);
     UpdatePickups(dt);
