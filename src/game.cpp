@@ -1007,6 +1007,7 @@ static void DrawTouchUI(const TouchInput& input) {
     DrawButton(slowRect, "SLOW", PURPLE, input.slowPressed);
 }
 
+static TouchInput g_input{};
 static void DrawGame() {
     BeginDrawing();
     ClearBackground(Color{ 12, 13, 18, 255 });
