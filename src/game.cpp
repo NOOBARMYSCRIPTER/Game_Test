@@ -780,7 +780,7 @@ static void UpdateEnemies(float dt) {
         }
 
         if (Dist(e.pos, g_player.pos) < e.radius + 14.0f) {
-            if (g_player.energy > 0.0f && IsKeyDown(KEY_UNUSED) == false) {
+            if (g_player.energy > 0.0f && IsKeyDown(KEY_SPACE) == false) {
                 if (g_player.shieldDrain > 0.0f) {
                     if (g_player.slowTimer >= 0.0f) {
                         if (g_player.energy > 0.0f) {
